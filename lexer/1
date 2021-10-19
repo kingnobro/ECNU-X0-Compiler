@@ -1,4 +1,4 @@
-main{
+main {
 	int x;
 	int y;
 	int m[3];

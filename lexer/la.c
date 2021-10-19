@@ -11,6 +11,8 @@
 #define nmax 14       /* 数字的最大位数 */
 #define al 10         /* 标识符的最大长度 */
 
+#define ENUM_SYMBOL(x)   case x: return(#x);
+
 /*
  * 符号
  * 
@@ -21,36 +23,44 @@
  * paren: ()
  */
 enum symbol {
+	/* 23 */
     ident,      number,     plus,       minus,      times,
     nul,        divide,     eql,        neq,        lss,
     leq,        gtr,        geq,        lparen,     rparen,
     comma,      semicolon,  lbracket,   rbracket,   lbrace,
-    rbrace,     becomes,
+    rbrace,     becomes,	comment,
+	/* 保留字 8 */
     ifsym,      elsesym,    whilesym,   writesym,   readsym,
     mainsym,    intsym,     charsym,
-}
-#define symnum 30
+};
+#define symnum 31
 
 /* 符号表中的类型 */
 enum object {
     constant,
-    variable, 
+    variable,
 };
 
-char ch;            /* 存放当前读取的字符，getch 使用 */
-enum symbol sym;    /* 当前的符号 */
-char id[al+1];      /* 当前ident，多出的一个字节用于存放0 */
-int num;            /* 当前number */
-int cc, ll;         /* getch使用的计数器，cc表示当前字符(ch)的位置 */
-char line[81];      /* 读取行缓冲区 */
-char a[al+1];       /* 临时符号，多出的一个字节用于存放0 */
-char word[norw][al];        /* 保留字 */
-enum symbol wsym[norw];     /* 保留字对应的符号值 */
-enum symbol ssym[256];      /* 单字符的符号值 */
+char ch;            				/* 存放当前读取的字符，getch 使用 */
+enum symbol sym;    				/* 当前的符号 */
+char identifier[al+1];      		/* 当前ident，多出的一个字节用于存放0 */
+int num;            				/* 当前number */
+int currentPosition, lastPosition;  /* getch使用的计数器，currentPosition表示当前字符(ch)的位置 */
+char line[81];      				/* 读取行缓冲区 */
+char a[al+1];       				/* 临时符号，多出的一个字节用于存放0 */
+char word[norw][al];        		/* 保留字 */
+enum symbol wsym[norw];     		/* 保留字对应的符号值 */
+enum symbol ssym[256];      		/* 单字符的符号值 */
+int statementLevel = 0;				/* 记录 {} 的嵌套层次数 */
+bool commentArea = false;			/* 记录注释的区域 */
+
+// -------------
+// debug 用
+bool finished = false;
+// -------------
 
 /* 符号表结构 */
-struct tablestruct
-{
+struct tablestruct {
 	char name[al];	    /* 名字 */
 	enum object kind;	/* 类型：const，var或procedure */
 };
@@ -59,14 +69,59 @@ struct tablestruct table[txmax]; /* 符号表 */
 
 FILE* fin;      /* 输入源文件 */
 FILE* foutput;  /* 输出文件及出错示意（如有错） */
-char fname[al];
+char filename[al];
+
+void error(int n); 
+void getsym();
+void getch();
+void init();
+
+/* 打印 type 对应的字符串, debug 用 */
+static inline const char *symbol_string(enum symbol type)
+{
+    switch (type)
+    {
+        ENUM_SYMBOL(ident)
+		ENUM_SYMBOL(number)
+		ENUM_SYMBOL(plus)
+		ENUM_SYMBOL(minus)
+		ENUM_SYMBOL(times)
+		ENUM_SYMBOL(nul)
+		ENUM_SYMBOL(divide)
+		ENUM_SYMBOL(eql)
+		ENUM_SYMBOL(neq)
+		ENUM_SYMBOL(lss)
+		ENUM_SYMBOL(leq)
+		ENUM_SYMBOL(gtr)
+		ENUM_SYMBOL(geq)
+		ENUM_SYMBOL(lparen)
+		ENUM_SYMBOL(rparen)
+		ENUM_SYMBOL(comma)
+		ENUM_SYMBOL(semicolon)
+		ENUM_SYMBOL(lbracket)
+		ENUM_SYMBOL(rbracket)
+		ENUM_SYMBOL(lbrace)
+		ENUM_SYMBOL(rbrace)
+		ENUM_SYMBOL(becomes)
+		ENUM_SYMBOL(ifsym)
+		ENUM_SYMBOL(elsesym)
+		ENUM_SYMBOL(whilesym)
+		ENUM_SYMBOL(writesym)
+		ENUM_SYMBOL(readsym)
+		ENUM_SYMBOL(mainsym)
+		ENUM_SYMBOL(intsym)
+		ENUM_SYMBOL(charsym)
+		ENUM_SYMBOL(comment)
+    }
+    return "Unsupported symbol";
+}
 
 /* 主程序开始 */
 int main() {
     printf("Input x0 file: ");
-	scanf("%s", fname);		/* 输入文件名 */
+	scanf("%s", filename);		/* 输入文件名 */
 
-	if ((fin = fopen(fname, "r")) == NULL) {
+	if ((fin = fopen(filename, "r")) == NULL) {
 		printf("Can't open the input file!\n");
 		exit(1);
 	}
@@ -87,10 +142,13 @@ int main() {
 	}
 
     init();		/* 初始化 */	
-	cc = ll = 0;
+	currentPosition = lastPosition = 0;
 	ch = ' ';
 
-	getsym();
+	while (!finished)  {
+		getsym();
+		printf("%s\n", symbol_string(sym));
+	}
 
     return 0;
 }
@@ -114,8 +172,8 @@ void init()
 	ssym[')'] = rparen;
     ssym['['] = lbracket;
     ssym[']'] = rbracket;
-    ssym['{'] = lparen;
-    ssym['}'] = rparen;
+    ssym['{'] = lbrace;
+    ssym['}'] = rbrace;
 	ssym['='] = becomes;
 	ssym[','] = comma;
 	ssym[';'] = semicolon;
@@ -141,6 +199,23 @@ void init()
 	wsym[7] = writesym;  
 }
 
+/* 
+ *	出错处理，打印出错位置和错误编码
+ *  遇到错误就退出语法分析
+ */	
+void error(int n)
+{
+	char space[81];
+	memset(space,32,81);
+
+	space[currentPosition-1]=0; /* 出错时当前符号已经读完，所以 currentPosition-1 */
+	
+	printf("%s^%d\n", space, n);
+	fprintf(foutput,"%s^%d\n", space, n);
+	
+	exit(1);
+}
+
 /*
  * 过滤空格，读取一个字符
  * 每次读一行，存入line缓冲区，line被getsym取空后再读一行
@@ -149,36 +224,31 @@ void init()
 void getch()
 {
 	/* 判断缓冲区中是否有字符，若无字符，则读入下一行字符到缓冲区中 */
-	// ll 指向一行末尾的位置
-	// 如果 cc == ll 则表示这一行读完了
-	if (cc == ll)
-	{
-		if (feof(fin))
-		{
+	// lastPosition 指向一行末尾的位置
+	// 如果 currentPosition == lastPosition 则表示这一行读完了
+	if (currentPosition == lastPosition) {
+		if (feof(fin)) {
 			printf("Program incomplete!\n");
 			exit(1);
 		}
-		ll = 0;
-		cc = 0;
+		lastPosition = 0;
+		currentPosition = 0;
 	
 		ch = ' ';
 		// 读入一整行
-		while (ch != 10)
-		{
-            if (EOF == fscanf(fin,"%c", &ch))   
-            {               
-                line[ll] = 0;
+		while (ch != 10) {
+            if (EOF == fscanf(fin,"%c", &ch)) {               
+                line[lastPosition] = 0;
                 break;
-            }                                   
+            }
             
-			printf("%c", ch);
 			fprintf(foutput, "%c", ch);
-			line[ll] = ch;
-			ll++;
+			line[lastPosition] = ch;
+			lastPosition++;
 		}
 	}
-	ch = line[cc];
-	cc++;
+	ch = line[currentPosition];
+	currentPosition++;
 }
 
 /* 
@@ -188,8 +258,8 @@ void getsym()
 {
 	int i,j,k;
 
-	while (ch == ' ' || ch == 10 || ch == 9)	/* 过滤空格、换行和制表符 */
-	{
+	while (ch == ' ' || ch == 10 || ch == 9) {
+		/* 过滤空格、换行和制表符 */
 		getch();
 	}
 	if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) /* 当前的单词是标识符或是保留字 */
@@ -197,30 +267,27 @@ void getsym()
 		// 读完当前的单词
 		k = 0;
 		do {
-			if(k < al)
-			{
+			if(k < al) {
 				a[k] = ch;
 				k++;
 			}
 			getch();
-		}while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
+		} while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
 		// 字符串末尾置 0
 		a[k] = 0;
-		strcpy(id, a);
+		strcpy(identifier, a);
 		i = 0;
 		j = norw - 1;
 		do {    /* 搜索当前单词是否为保留字，使用二分法查找 */
 			k = (i + j) / 2;
-			if (strcmp(id,word[k]) <= 0)
-			{
+			if (strcmp(identifier,word[k]) <= 0) {
 			    j = k - 1;
 			}
-			if (strcmp(id,word[k]) >= 0)
-			{
+			if (strcmp(identifier,word[k]) >= 0) {
 			    i = k + 1;
 			}
 		} while (i <= j);
-		if (i-1 > j) /* 当前的单词是保留字 */
+		if (i - 1 > j) /* 当前的单词是保留字 */
 		{
 		    sym = wsym[k];
 		}
@@ -249,7 +316,7 @@ void getsym()
 		}
 		else
 		{
-			if (ch == ':')		/* 检测赋值符号 */
+			if (ch == '=')		/* 检测赋值符号 */
 			{
 				getch();
 				if (ch == '=')
@@ -259,7 +326,7 @@ void getsym()
 				}
 				else
 				{
-					sym = nul;	/* 不能识别的符号 */
+					sym = eql;
 				}
 			}
 			else
@@ -292,14 +359,57 @@ void getsym()
 							sym = gtr;
 						}
 					}
-					else
-					{
-						sym = ssym[ch];		/* 当符号不满足上述条件时，全部按照单字符符号处理 */                   
-                        if (sym != period)  
-                        {
-                            getch();        
-                        }
-                   
+					else {
+						if (ch == '!')	/* 检测不等于符号 */
+						{
+							getch();
+							if (ch == '=') {
+								sym = neq;
+								getch();
+							} else {
+								sym = nul;
+							}
+						}
+						else {
+							if (ch == '/')	/* 检测注释 */
+							{
+								getch();
+								if (ch == '*') {
+									sym = comment;
+									commentArea = true;
+									while (true) {
+										getch();
+										/* 去掉注释中的内容 */
+										while (ch == '*') {
+											getch();
+											if (ch == '/') {
+												commentArea = false;
+												break;
+											}
+										}
+										if (!commentArea) break;
+									}
+									getch();
+								}
+								else {
+									sym = divide;
+								}
+							}
+							else {
+								/* 当符号不满足上述条件时，全部按照单字符符号处理 */
+								sym = ssym[ch];
+								/* 计算嵌套层数 */
+								statementLevel += (sym == lbrace);
+								statementLevel -= (sym == rbrace);
+								if (statementLevel != 0) {
+									getch();
+								}
+								// debug 用
+								if (statementLevel == 0) {
+									finished = true;
+								}
+							}	
+						}
 					}
 				}
 			}
