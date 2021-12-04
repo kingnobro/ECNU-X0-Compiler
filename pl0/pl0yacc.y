@@ -9,6 +9,10 @@
 #define txmax 100     /* 符号表容量 */
 #define al 10         /* 标识符的最大长度 */
 
+extern int yyerror(char *);
+extern int yylex(void);
+extern void redirectInput(FILE *input);
+
 /* 符号表中的类型 */
 enum object {
     constant, 
