@@ -2,4 +2,5 @@
 
 !*.l
 !*.y
-Makefile
+!Makefile
+!README.md

@@ -6,7 +6,6 @@
 #include<memory.h>
 #include<string.h>
 
-
 #define txmax 100     /* 符号表容量 */
 #define al 10         /* 标识符的最大长度 */
 

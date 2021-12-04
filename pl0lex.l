@@ -4,7 +4,7 @@
 #include "pl0yacc.tab.h"
 
 int line=1;
-void yyerror(char *);
+void yyerror(char *);	// 在 tab.c 中定义, 在此处声明
 int yywrap(void);
 %}
 
@@ -25,28 +25,26 @@ int yywrap(void);
 "while"	{return WHILESYM;}
 "write"	{return WRITESYM;}
 [A-Za-z]([A-Za-z]|[0-9])*	{yylval.ident=(char *)malloc(strlen(yytext)+1);
-                                 strcpy(yylval.ident,yytext);
-                                 return IDENT;
-}
-[0-9]+	{yylval.number=atoi(yytext);
-	 return NUMBER;}
+                             strcpy(yylval.ident,yytext);
+                             return IDENT;}
+[0-9]+	{yylval.number=atoi(yytext); return NUMBER;}
 ":="	{return BECOMES;}
-"<"	{return LSS;}
+"<"		{return LSS;}
 "<="	{return LEQ;}
-">"	{return GTR;}
+">"		{return GTR;}
 ">="	{return GEQ;}
-"+"	{return PLUS;}
-"-"	{return MINUS;}
-"*"	{return TIMES;}
-"/"	{return	SLASH;}
-"("	{return	LPAREN;}
-")"	{return	RPAREN;}
-"="	{return	EQL;}
-","	{return COMMA;}
-"."	{return PERIOD;}
-"#"	{return NEQ;}
-";"	{return	SEMICOLON;}
-.	{yyerror("Unknown character!");}
+"+"		{return PLUS;}
+"-"		{return MINUS;}
+"*"		{return TIMES;}
+"/"		{return	SLASH;}
+"("		{return	LPAREN;}
+")"		{return	RPAREN;}
+"="		{return	EQL;}
+","		{return COMMA;}
+"."		{return PERIOD;}
+"#"		{return NEQ;}
+";"		{return	SEMICOLON;}
+.		{yyerror("Unknown character!");}
 
 %%
 
