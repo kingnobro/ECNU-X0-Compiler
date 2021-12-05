@@ -7,17 +7,25 @@ void yyerror(char *);
 int yywrap(void);
 
 int line = 1;
-int debugMode = 1;
+int debugMode = 0;
 %}
 
 %%
 [ \t]   { ; }
 [\n]    { line += 1; }
 [\r\n]  { line += 1; }
-"char"  { if(debugMode) printf("char\n"); return CHARSYM; }
-"else"  { if(debugMode) printf("else\n"); return ELSESYM; }
+"char"  { 
+    if(debugMode) printf("char\n");
+    yylval.type = (char *)malloc(strlen(yytext) + 1);
+    return CHARSYM;
+}
+"int"   { 
+    if(debugMode) printf("int\n");
+    yylval.type = (char *)malloc(strlen(yytext) + 1);
+    return INTSYM;
+}
 "if"    { if(debugMode) printf("if\n"); return IFSYM; }
-"int"   { if(debugMode) printf("int\n"); return INTSYM; }
+"else"  { if(debugMode) printf("else\n"); return ELSESYM; }
 "main"  { if(debugMode) printf("main\n"); return MAINSYM; }
 "read"  { if(debugMode) printf("read\n"); return READSYM; }
 "while" { if(debugMode) printf("while\n"); return WHILESYM; }

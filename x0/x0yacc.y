@@ -14,6 +14,7 @@ extern void redirectInput(FILE *input);
 // 符号表中的类型
 enum object {
     variable,
+    array,
 };
 
 // 符号表结构
@@ -38,6 +39,7 @@ int position(char *s);
 
 %union {
     char *ident;
+    char *type;
     int number;
 }
 
@@ -45,6 +47,7 @@ int position(char *s);
 %token PLUS MINUS TIMES DIVIDE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON GRT LES LEQ GEQ NEQ EQL
 %token <ident> IDENT
 %token <number> NUMBER
+%type <number> var
 
 %left    PLUS MINUS
 %left    TIMES DIVIDE
@@ -64,7 +67,15 @@ declaration_list:
 
 declaration_stat:
     type IDENT SEMICOLON
+    {
+        strcpy(id, $2);
+        enter(variable);
+    }
     | type IDENT LBRACKET NUMBER RBRACKET SEMICOLON
+    {
+        strcpy(id, $2);
+        enter(array);
+    }
     ;
 
 type:
@@ -74,13 +85,18 @@ type:
 
 var:
     IDENT
+    {
+        $$ = position($1);
+    }
     | IDENT LBRACKET expression RBRACKET
+    {
+        $$ = position($1);
+    }
     ;
 
 statement_list:
     statement_list statement
-    |
-    statement
+    | statement
     ;
 
 statement:
@@ -120,6 +136,9 @@ expression_stat:
 
 expression:
     var BECOMES expression
+    {
+        printf("%d\n", $1);
+    }
     | simple_expr
     ;
 
