@@ -7,34 +7,40 @@
 #define MaxTableSize 100    // 符号表容量
 #define MaxNameLength 10    // 标识符的最大长度
 
-extern int yyerror(char *);
-extern int yylex(void);
-extern void redirectInput(FILE *input);
-
-// 符号表中的类型
+// 符号表中符号的类型
 enum {
     variable = 0,
     array,
 };
 
-// 符号表结构
+// 符号表中符号的构成
 typedef struct _symbol {
     char symbolName[MaxNameLength]; // 名字
     int symbolType; // 类型(const, variable)
 } symbol;
-symbol symbolTable[MaxTableSize]; // 符号表
 
-int tail; // 符号表当前尾指针
-char identifier[MaxNameLength];
+// 符号表
+symbol symbolTable[MaxTableSize];
 
-FILE* fin;  // 输入源文件
-FILE* fout; // 输出错误信息
-char filename[MaxNameLength];
+// 符号表当前尾指针
+int tail;
+
+// 打印错误信息
 int errorCount;
 extern int line;
 
+// 输入输出文件
+FILE* fin;
+FILE* fout;
+char filename[MaxNameLength];
+
+char identifier[MaxNameLength];
+
 void addToTable(int symbolType);
 int positionOfSymbol(char *s);
+extern int yyerror(char *);
+extern int yylex(void);
+extern void redirectInput(FILE *input);
 %}
 
 %union {
@@ -179,17 +185,22 @@ int yyerror(char *s) {
     return 0;
 }
 
+/*
+ * symbolTable[0] 留空, 符号从 1 开始存储
+ */
 void addToTable(int symbolType) {
     tail += 1;
     strcpy(symbolTable[tail].symbolName, identifier);
     symbolTable[tail].symbolType = symbolType;
 }
 
-int positionOfSymbol(char *s) {
-    int i;
-    strcpy(symbolTable[0].symbolName, s);
-    i = tail;
-    while (strcmp(symbolTable[i].symbolName, s) != 0) {
+/*
+ * 按 name 查找 symbol 的下标, 如果不存在返回 0
+ */
+int positionOfSymbol(char *name) {
+    int i = tail;
+    strcpy(symbolTable[0].symbolName, name);
+    while (strcmp(symbolTable[i].symbolName, name) != 0) {
         i -= 1;
     }
     return i;
