@@ -26,7 +26,7 @@ symbol symbolTable[MaxTableSize];
 int tail;
 
 // 打印错误信息
-int errorCount;
+int errorNumber;
 extern int line;
 
 // 输入输出文件
@@ -179,7 +179,7 @@ factor:
 %%
 
 int yyerror(char *s) {
-    errorCount += 1;
+    errorNumber += 1;
     printf("%s in line %d\n", s, line);
     fprintf(fout, "%s in line %d\n", s, line);
     return 0;
@@ -221,14 +221,14 @@ int main() {
 
     redirectInput(fin);
     tail = 0;
-    errorCount = 0;
+    errorNumber = 0;
     yyparse();
-    if (errorCount == 0) {
+    if (errorNumber == 0) {
         printf("\n===Parsing Success===\n");
         fprintf(fout, "\n===Parsing Success===\n");
     } else {
-        printf("%d errors in x0 program\n", errorCount);
-        fprintf(fout, "%d errors in x0 program\n", errorCount);
+        printf("%d errors in x0 program\n", errorNumber);
+        fprintf(fout, "%d errors in x0 program\n", errorNumber);
     }
     fclose(fout);
     fclose(fin);
