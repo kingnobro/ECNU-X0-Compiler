@@ -4,37 +4,37 @@
 #include <memory.h>
 #include <string.h>
 
-#define tableSize 100   // 符号表容量
-#define maxLength 10    // 标识符的最大长度
+#define MaxTableSize 100    // 符号表容量
+#define MaxNameLength 10    // 标识符的最大长度
 
 extern int yyerror(char *);
 extern int yylex(void);
 extern void redirectInput(FILE *input);
 
 // 符号表中的类型
-enum object {
-    variable,
+enum {
+    variable = 0,
     array,
 };
 
 // 符号表结构
-struct tablestruct {
-    char name[maxLength];   // 名字
-    enum object kind;       // 类型(const, variable)
-};
-struct tablestruct table[tableSize];    // 符号表
+typedef struct _symbol {
+    char symbolName[MaxNameLength]; // 名字
+    int symbolType; // 类型(const, variable)
+} symbol;
+symbol symbolTable[MaxTableSize]; // 符号表
 
-int tail;   // 符号表当前尾指针
-char id[maxLength];
+int tail; // 符号表当前尾指针
+char identifier[MaxNameLength];
 
 FILE* fin;  // 输入源文件
 FILE* fout; // 输出错误信息
-char filename[maxLength];
+char filename[MaxNameLength];
 int errorCount;
 extern int line;
 
-void enter(enum object k);
-int position(char *s);
+void addToTable(int symbolType);
+int positionOfSymbol(char *s);
 %}
 
 %union {
@@ -68,13 +68,13 @@ declaration_list:
 declaration_stat:
     type IDENT SEMICOLON
     {
-        strcpy(id, $2);
-        enter(variable);
+        strcpy(identifier, $2);
+        addToTable(variable);
     }
     | type IDENT LBRACKET NUMBER RBRACKET SEMICOLON
     {
-        strcpy(id, $2);
-        enter(array);
+        strcpy(identifier, $2);
+        addToTable(array);
     }
     ;
 
@@ -86,11 +86,11 @@ type:
 var:
     IDENT
     {
-        $$ = position($1);
+        $$ = positionOfSymbol($1);
     }
     | IDENT LBRACKET expression RBRACKET
     {
-        $$ = position($1);
+        $$ = positionOfSymbol($1);
     }
     ;
 
@@ -179,17 +179,17 @@ int yyerror(char *s) {
     return 0;
 }
 
-void enter(enum object k) {
+void addToTable(int symbolType) {
     tail += 1;
-    strcpy(table[tail].name, id);
-    table[tail].kind = k;
+    strcpy(symbolTable[tail].symbolName, identifier);
+    symbolTable[tail].symbolType = symbolType;
 }
 
-int position(char *s) {
+int positionOfSymbol(char *s) {
     int i;
-    strcpy(table[0].name, s);
+    strcpy(symbolTable[0].symbolName, s);
     i = tail;
-    while (strcmp(table[i].name, s) != 0) {
+    while (strcmp(symbolTable[i].symbolName, s) != 0) {
         i -= 1;
     }
     return i;
