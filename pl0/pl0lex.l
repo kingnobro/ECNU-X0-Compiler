@@ -1,10 +1,11 @@
 %{
-#include <stdio.h>
-#include <string.h>
+#include "stdio.h"
+#include "string.h"
+#include "malloc.h"
 #include "pl0yacc.tab.h"
 
 int line=1;
-void yyerror(char *);	// 在 tab.c 中定义, 在此处声明
+void yyerror(char *);
 int yywrap(void);
 %}
 
@@ -25,9 +26,11 @@ int yywrap(void);
 "while"	{return WHILESYM;}
 "write"	{return WRITESYM;}
 [A-Za-z]([A-Za-z]|[0-9])*	{yylval.ident=(char *)malloc(strlen(yytext)+1);
-                            	strcpy(yylval.ident,yytext);
-                            	return IDENT;}
-[0-9]+	{yylval.number=atoi(yytext); return NUMBER;}
+                                 strcpy(yylval.ident,yytext);
+                                 return IDENT;
+}
+[0-9]+	{yylval.number=atoi(yytext);
+	 return NUMBER;}
 ":="	{return BECOMES;}
 "<"	{return LSS;}
 "<="	{return LEQ;}
