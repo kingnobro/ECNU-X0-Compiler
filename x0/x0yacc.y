@@ -45,7 +45,6 @@ extern void redirectInput(FILE *input);
 
 %union {
     char *ident;
-    char *type;
     int number;
 }
 

@@ -20,7 +20,7 @@
 /* 符号表中的类型 */
 enum object {
     constant, 
-    variable, 
+    variable,
     procedure,
 };
 
