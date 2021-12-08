@@ -6,4 +6,4 @@ prog:   pl0lex.l pl0yacc.y
 	cc -g lex.yy.c pl0yacc.tab.c -lm
 
 clean:  
-	rm lex.yy.c pl0yacc.tab.c pl0yacc.tab.h
+	rm lex.yy.c pl0yacc.tab.c pl0yacc.tab.h *.txt *.out

@@ -3,7 +3,6 @@
 %{
 #include<stdio.h>
 #include<stdlib.h>
-#include<malloc.h>
 #include<memory.h>
 #include<string.h>
 
@@ -28,12 +27,12 @@ enum object {
 /* 符号表结构 */
 struct tablestruct
 {
-   char name[al];      /* 名字 */
-   enum object kind;   /* 类型：const，var或procedure */
-   int val;            /* 数值，仅const使用 */
-	 int level;          /* 所处层，仅const不使用 */ 
-	 int adr;            /* 地址，仅const不使用 */
-	 int size;           /* 需要分配的数据区空间, 仅procedure使用 */
+	char name[al];      /* 名字 */
+	enum object kind;   /* 类型：const，var或procedure */
+	int val;            /* 数值，仅const使用 */
+	int level;          /* 所处层，仅const不使用 */ 
+	int adr;            /* 地址，仅const不使用 */
+	int size;           /* 需要分配的数据区空间, 仅procedure使用 */
 };
 struct tablestruct table[txmax]; /* 符号表 */
 
@@ -64,7 +63,7 @@ bool listswitch;   /* 显示虚拟机代码与否 */
 bool tableswitch;  /* 显示符号表与否 */
 
 FILE* fin;      /* 输入源文件 */
-FILE* ftable;	  /* 输出符号表 */
+FILE* ftable;	/* 输出符号表 */
 FILE* fcode;    /* 输出虚拟机代码 */
 FILE* foutput;  /* 输出出错示意（如有错） */
 FILE* fresult;  /* 输出执行结果 */
@@ -432,7 +431,7 @@ dec_level_px:
 int yyerror(char *s)
 {
 	err = err + 1;
-  printf("%s in line %d\n", s, line);
+	printf("%s in line %d\n", s, line);
 	fprintf(foutput, "%s in line %d\n", s, line);
 	return 0;
 }
@@ -443,10 +442,10 @@ void init()
 	tx = 0;
 	cx = 0;
 	px = 0;  
-  lev = 0;   
-  proctable[0] = 0;
-  num = 0;
-  err = 0;
+	lev = 0;   
+	proctable[0] = 0;
+	num = 0;
+	err = 0;
 }
 
 /* 在符号表中加入一项 */
@@ -496,7 +495,7 @@ void gen(enum fct x, int y, int z)
 		printf("Program is too long!\n");	/* 生成的虚拟机代码程序过长 */
 		exit(1);
 	}
-	if ( z >= amax)
+	if (z >= amax)
 	{
 		printf("Displacement address is too big!\n");	/* 地址偏移越界 */
 		exit(1);
@@ -521,7 +520,6 @@ void listall()
 		{
 			printf("%d %s %d %d\n", i, name[code[i].f], code[i].l, code[i].a);
 			fprintf(fcode,"%d %s %d %d\n", i, name[code[i].f], code[i].l, code[i].a);
-			
 		}
 	}
 }
@@ -530,10 +528,9 @@ void listall()
 void displaytable()
 {
 	int i;
-if (tableswitch)		/* 输出符号表 */
+	if (tableswitch)		/* 输出符号表 */
 	{
-	
-	for (i = 1; i <= tx; i++)
+		for (i = 1; i <= tx; i++)
 		{
 			switch (table[i].kind)
 			{
@@ -715,7 +712,7 @@ int main(void)
 		exit(1);
 	}	
 	if ((foutput = fopen("foutput.txt", "w")) == NULL)
-  {
+	{
 		printf("Can't open the output file!\n");
 		exit(1);
 	}
@@ -735,7 +732,7 @@ int main(void)
 	
 	redirectInput(fin);		
 	init();
-  yyparse();
+  	yyparse();
 	if(err == 0)
 	{
 		printf("\n===Parsing success!===\n");
@@ -758,7 +755,7 @@ int main(void)
 		interpret();	/* 调用解释执行程序 */        	
 		fclose(fresult);
 	}
-  else
+  	else
 	{
 		printf("%d errors in PL/0 program\n", err);
 		fprintf(foutput, "%d errors in PL/0 program\n", err);
@@ -766,7 +763,7 @@ int main(void)
 	}
 	
 	fclose(ftable);
-  fclose(foutput);
+  	fclose(foutput);
 	fclose(fin);
 	return 0;
 }

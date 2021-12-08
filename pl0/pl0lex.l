@@ -1,7 +1,6 @@
 %{
-#include "stdio.h"
-#include "string.h"
-#include "malloc.h"
+#include <stdio.h>
+#include <string.h>
 #include "pl0yacc.tab.h"
 
 int line=1;
