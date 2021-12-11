@@ -137,7 +137,7 @@ program:
 
 code_address:  // 记录下当前汇编代码地址, 用于计算跳转地址
     {
-        $$ = codeTableTail
+        $$ = codeTableTail;
     }
     ;
 
@@ -833,18 +833,18 @@ void interpret()
 }
 
 int main() {
-    const char *testfilename = "test/bool.x0";
-    printf("x0 filename: %s\n", testfilename);
-    if ((fin = fopen(testfilename, "r")) == NULL) {
-        fatal("Can't open the input file!");
-    }
-    
-    // printf("x0 filename: ");
-    // scanf("%s", filename);
-
+    // const char *testfilename = "test/bool.x0";
+    // printf("x0 filename: %s\n", testfilename);
     // if ((fin = fopen(testfilename, "r")) == NULL) {
     //     fatal("Can't open the input file!");
     // }
+    
+    printf("x0 filename: ");
+    scanf("%s", filename);
+
+    if ((fin = fopen(filename, "r")) == NULL) {
+        fatal("Can't open the input file!");
+    }
     if ((fout = fopen("foutput.txt", "w")) == NULL) {
         fatal("Can't open the foutput.txt file!");
     }
@@ -866,7 +866,6 @@ int main() {
         }
 
         display_table();
-        fclose(ftable);
 
         listAllCode();      // 输出所有汇编指令
         fclose(fcode);
