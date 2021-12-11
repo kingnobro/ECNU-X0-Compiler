@@ -58,8 +58,13 @@ int symbolTableTail;    // 符号表当前尾指针
 int codeTableTail;      // 虚拟机代码指针
 int procTableTail;      // 嵌套过程索引表 proctable 的指针
 int currentLevel;       // 层次记录
+int variableCount;      // 变量个数, 用于符号表
+int variableSize;       // 变量大小, 用于栈
 bool listSwitch;        // 是否显示虚拟机代码
 bool tableSwitch;       // 是否显示符号表
+bool is_char;
+bool is_array_element;
+bool is_write;
 int proctable[3];       // 嵌套过程索引表, 最多嵌套三层
 char identifier[MaxNameLength];
 
@@ -79,6 +84,7 @@ void genCode(int op, int level_diff, int a);
 void setReletiveAddress(int localVariablCount);
 void interpret();
 void fatal(char *s);
+void display_table();
 int positionOfSymbol(char *s);
 extern int yyerror(char *);
 extern int yylex(void);
@@ -94,7 +100,7 @@ extern void redirectInput(FILE *input);
 %token PLUS MINUS TIMES DIVIDE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON GRT LES LEQ GEQ NEQ EQL
 %token <ident> IDENT
 %token <number> NUMBER
-%type <number> var
+%type <number> var code_address type else_stat
 
 %left    PLUS MINUS
 %left    TIMES DIVIDE
@@ -104,7 +110,30 @@ extern void redirectInput(FILE *input);
 %%
 
 program:
-    MAINSYM LBRACE declaration_list statement_list RBRACE
+    code_address
+    {
+        genCode(jmp, 0, 0);
+    }
+    MAINSYM
+    {
+        // 记录 main 函数的起始地址
+        code[$1].a = codeTableTail;
+    }
+    LBRACE declaration_list
+    {
+        setReletiveAddress(variableCount);  // 写入符号表
+        genCode(ini, 0, variableSize + 3);  // 栈分配空间
+    }
+    statement_list RBRACE
+    {
+        genCode(opr, 0, 0); // main 函数终止
+    }
+    ;
+
+code_address:  // 记录下当前汇编代码地址, 用于计算跳转地址
+    {
+        $$ = codeTableTail
+    }
     ;
 
 declaration_list:
@@ -115,29 +144,67 @@ declaration_list:
 declaration_stat:
     type IDENT SEMICOLON
     {
+        // 基本变量
+        variableCount += 1;
+        variableSize += 1;
         strcpy(identifier, $2);
         addToTable(variable);
+        if ($1 == 1) {
+            symbolTable[symbolTableTail].datatype = x0_int;
+        } else {
+            symbolTable[symbolTableTail].datatype = x0_char;
+        }
     }
     | type IDENT LBRACKET NUMBER RBRACKET SEMICOLON
     {
+        // 数组变量
+        variableCount += 1;
+        variableSize += $4;
         strcpy(identifier, $2);
         addToTable(array);
+        symbolTable[symbolTableTail].size = $4; // 记录数组元素个数
+        if ($1 == 1) {
+            symbolTable[symbolTableTail].datatype = x0_int;
+        } else {
+            symbolTable[symbolTableTail].datatype = x0_char;
+        }
     }
     ;
 
 type:
     INTSYM
+    {
+        $$ = 1;
+    }
     | CHARSYM
+    {
+        $$ = 2;
+    }
     ;
 
 var:
     IDENT
     {
         $$ = positionOfSymbol($1);
+        if (symbolTable[$$].datatype == x0_char) {
+            is_char = true;
+        } else {
+            is_char = false;
+        }
+        is_array_element = false;
     }
     | IDENT LBRACKET expression RBRACKET
     {
         $$ = positionOfSymbol($1);
+        if (symbolTable[$$].datatype == x0_char) {
+            is_char = true;
+        } else {
+            is_char = false;
+        }
+        is_array_element = true;
+
+        genCode(lit, 0, symbolTable[$$].address);   // 把数组基址存入栈顶
+        genCode(opr, 0, 2); // 基址+偏移量. 偏移量是由 expression 放入栈顶的
     }
     ;
 
@@ -156,20 +223,63 @@ statement:
     ;
 
 if_stat:
-    IFSYM LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
-    | IFSYM LPAREN expression RPAREN statement ELSESYM statement
-    ;
+    IFSYM LPAREN expression RPAREN code_address
+    {
+        genCode(jpc, 0, 0);
+    }
+    statement else_stat
+    {
+        // 如果 if 条件不成立, 直接跳转
+        code[$5].a = $8;
+    }
+
+else_stat:
+    ELSESYM code_address
+    {
+        genCode(jmp, 0, 0);
+    }
+    statement
+    {
+        $$ = $2 + 1;    // 有 else 分支, 跳转到 else 的 statement
+        code[$2].a = codeTableTail;
+    }
+    |
+    {
+        $$ = codeTableTail;
+    }
+
 
 while_stat:
-    WHILESYM LPAREN expression RPAREN statement
+    WHILESYM LPAREN code_address expression RPAREN code_address 
+    {
+        genCode(jpc, 0, 0);
+    }
+    statement
+    {
+        genCode(jmp, 0, $3);
+        code[$6].a = codeTableTail;
+    }
     ;
 
 write_stat:
-    WRITESYM expression SEMICOLON
+    WRITESYM 
+    {
+        is_write = true;
+    }
+    expression_stat
     ;
 
 read_stat:
     READSYM var SEMICOLON
+    {
+        if (is_char) genCode(opr, 0, 20); // 读 char
+        else genCode(opr, 0, 16);   // 读 int
+
+        if (is_array_element) genCode(opr, 0, 17); // 存到数组
+        else genCode(sto, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+
+        genCode(pop, 0, 1);
+    }
     ;
 
 compound_stat:
@@ -178,13 +288,24 @@ compound_stat:
 
 expression_stat:
     expression SEMICOLON
+    {
+        if (is_write)
+        {
+            if (is_char) genCode(opr, 0, 19);
+            else genCode(opr, 0, 14);
+            genCode(opr, 0, 15);    // 换行符
+            is_write = false;
+        }
+        genCode(pop, 0, 1); // 弹出 expression 的值
+    }
     | SEMICOLON
     ;
 
 expression:
     var BECOMES expression
     {
-        printf("%d\n", $1);
+        if (is_array_element) genCode(opr, 0, 17);
+        else genCode(sto, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
     }
     | simple_expr
     ;
@@ -192,29 +313,66 @@ expression:
 simple_expr:
     additive_expr
     | additive_expr GRT additive_expr
+    {
+        genCode(opr, 0, 8);
+    }
     | additive_expr LES additive_expr
+    {
+        genCode(opr, 0, 9);
+    }
     | additive_expr GEQ additive_expr
+    {
+        genCode(opr, 0, 10);
+    }
     | additive_expr LEQ additive_expr
+    {
+        genCode(opr, 0, 11);
+    }
     | additive_expr EQL additive_expr
+    {
+        genCode(opr, 0, 12);
+    }
     | additive_expr NEQ additive_expr
+    {
+        genCode(opr, 0, 13);
+    }
     ;
 
 additive_expr:
     term
     | additive_expr PLUS term
+    {
+        genCode(opr, 0, 2);
+    }
     | additive_expr MINUS term
+    {
+        genCode(opr, 0, 3);
+    }
     ;
 
 term:
     factor
     | term TIMES factor
+    {
+        genCode(opr, 0, 4);
+    }
     | term DIVIDE factor
+    {
+        genCode(opr, 0, 5);
+    }
     ;
 
 factor:
     LPAREN expression RPAREN
     | var
+    {
+        if (is_array_element) genCode(opr, 0, 18);
+        else genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+    }
     | NUMBER
+    {
+        genCode(lit, 0, $1);
+    }
     ;
 
 %%
@@ -235,9 +393,13 @@ void init() {
     codeTableTail = 0;
     procTableTail = 0;
     symbolTableTail = 0;
+    variableCount = 0;
     currentLevel = 0;
     proctable[0] = 0;
     errorNumber = 0;
+    is_char = false;
+    is_array_element = false;
+    is_write = false;
 }
 
 void setReletiveAddress(int localVariablCount) {
@@ -260,6 +422,7 @@ void listAllCode() {
         { "ini" },
         { "jmp" },
         { "jpc" },
+        { "pop" },
     };
     if (listSwitch) {
         for (int i = 0; i < codeTableTail; i++) {
@@ -293,7 +456,84 @@ void addToTable(int type) {
     symbolTableTail += 1;
     strcpy(symbolTable[symbolTableTail].name, identifier);
     symbolTable[symbolTableTail].type = type;
-    symbolTable[symbolTableTail].level = currentLevel;
+    switch (type) {
+        case variable:
+            symbolTable[symbolTableTail].level = currentLevel;
+            symbolTable[symbolTableTail].size = 1;
+            break;
+        case array:
+            symbolTable[symbolTableTail].level = currentLevel;
+            break;
+        case procedure:
+            break;
+    }
+}
+
+void display_table() {
+    char map[][5] = {
+        { "int" },
+        { "char" },
+    };
+    printf("num    name    type      level  address  size\n");
+    fprintf(ftable, "num    name    type      level  address  size\n");
+    for (int i = 1; i <= symbolTableTail; i++) {   
+        switch (symbolTable[i].type) {
+            case variable:
+                printf(
+                    "%3d     %s     var:%s    %2d      %3d    %3d\n",
+                    i,
+                    symbolTable[i].name,
+                    map[symbolTable[i].datatype],
+                    symbolTable[i].level,
+                    symbolTable[i].address,
+                    symbolTable[i].size
+                );
+                fprintf(
+                    ftable,
+                    "%3d     %s     var:%s    %2d      %3d    %3d\n",
+                    i,
+                    symbolTable[i].name,
+                    map[symbolTable[i].datatype],
+                    symbolTable[i].level,
+                    symbolTable[i].address,
+                    symbolTable[i].size
+                );
+                break;
+            case array:
+                printf(
+                    "%3d     %s     ary:%s    %2d      %3d    %3d\n",
+                    i,
+                    symbolTable[i].name,
+                    map[symbolTable[i].datatype],
+                    symbolTable[i].level,
+                    symbolTable[i].address,
+                    symbolTable[i].size
+                );
+                fprintf(
+                    ftable,
+                    "%3d     %s     ary:%s    %2d      %3d    %3d\n",
+                    i,
+                    symbolTable[i].name,
+                    map[symbolTable[i].datatype],
+                    symbolTable[i].level,
+                    symbolTable[i].address,
+                    symbolTable[i].size
+                );
+                break;
+
+            case procedure:
+                /*
+                printf("    %d proc  %s ", i, symbolTable[i].name);
+                printf("lev=%d addr=%d size=%d\n", symbolTable[i].level, symbolTable[i].adr, symbolTable[i].size);
+
+                fprintf(ftable,"    %d proc  %s ", i, symbolTable[i].name);
+                fprintf(ftable,"lev=%d addr=%d size=%d\n", symbolTable[i].level, symbolTable[i].adr, symbolTable[i].size);
+                */
+                break;
+        }
+    }
+    printf("\n");
+    fprintf(ftable, "\n");
 }
 
 /*
@@ -333,7 +573,7 @@ void interpret()
     int s[StackSize];   // 栈
 
     printf("Start X0\n");
-    fprintf(fout,"Start X0\n");
+    fprintf(fresult,"Start X0\n");
 
     s[0] = 0; //s[0]不用
     s[1] = 0; //主程序的三个联系单元均置为0
@@ -407,18 +647,18 @@ void interpret()
                         break;
                     case 14:    // 栈顶值输出
                         printf("%d", s[t]);
-                        fprintf(fout, "%d", s[t]);
+                        fprintf(fresult, "%d", s[t]);
                         break;
                     case 15:    // 输出换行符
                         printf("\n");
-                        fprintf(fout,"\n");
+                        fprintf(fresult, "\n");
                         break;
                     case 16:    // 读入一个输入置于栈顶
                         t = t + 1;
                         printf("?");
-                        fprintf(fout, "?");
+                        fprintf(fresult, "?");
                         scanf("%d", &(s[t]));
-                        fprintf(fout, "%d\n", s[t]);						
+                        fprintf(fresult, "%d\n", s[t]);						
                         break;
                     case 17:    // 把栈顶的值存入存入数组
                         t = t - 1;
@@ -427,14 +667,14 @@ void interpret()
                         s[t] = s[s[t]+1];
                     case 19:    // 输出栈顶的字符
                         printf("%c", s[t]);
-                        fprintf(fout, "%c", s[t]);
+                        fprintf(fresult, "%c", s[t]);
                         break;
                     case 20:    // 读入一个字符置于栈顶
                         t = t + 1;
                         printf("?");
-                        fprintf(fout, "?");
+                        fprintf(fresult, "?");
                         scanf("%d", &(s[t]));
-                        fprintf(fout, "%c\n", s[t]);						
+                        fprintf(fresult, "%c\n", s[t]);						
                         break;
                     case 21:    // mod 运算符
                         t = t - 1;
@@ -450,7 +690,7 @@ void interpret()
                 break;
             case sto:	// 栈顶的值存到相对当前过程的数据基地址为a的内存
                 s[base(i.level_diff, s, b) + i.a] = s[t];
-                t = t - 1;
+                // t = t - 1;  // 改为手动 pop
                 break;
             case cal:	// 调用子过程
                 s[t + 1] = base(i.level_diff, s, b);	// 将父过程基地址入栈，即建立静态链
@@ -472,7 +712,7 @@ void interpret()
         }
     } while (p != 0);
     printf("End X0\n");
-    fprintf(fout,"End X0\n");
+    fprintf(fresult,"End X0\n");
 }
 
 int main() {
@@ -485,7 +725,7 @@ int main() {
     if ((fout = fopen("foutput.txt", "w")) == NULL) {
         fatal("Can't open the foutput.txt file!");
     }
-    if ((fout = fopen("ftable.txt", "w")) == NULL) {
+    if ((ftable = fopen("ftable.txt", "w")) == NULL) {
         fatal("Can't open the ftable.txt file!");
     }
 
@@ -495,7 +735,7 @@ int main() {
     listSwitch = (filename[0]=='y' || filename[0]=='Y');
 
     // 是否输出符号表
-    printf("List symbol table?(Y/N)");
+    printf("List symbol symbolTable?(Y/N)");
     scanf("%s", filename);
     tableSwitch = (filename[0]=='y' || filename[0]=='Y');
 
@@ -512,10 +752,13 @@ int main() {
             fatal("Can't open the fresult.txt file!");
         }
 
+        display_table();
+        fclose(ftable);
+
         listAllCode();      // 输出所有汇编指令
         fclose(fcode);
 
-        // interpret();    // 调用解释执行程序
+        interpret();    // 调用解释执行程序
         fclose(fresult);
     } else {
         printf("%d errors in x0 program\n", errorNumber);
