@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #define MaxTableSize    100     // 符号表容量
-#define MaxNameLength   10      // 标识符的最大长度
+#define MaxNameLength   20      // 标识符的最大长度
 #define MaxAddress      2028    // 地址上界
 #define MaxLevel        3       // 最大允许过程嵌套声明层数
 #define MaxInstrNumber  200     // 最多的虚拟机代码数
@@ -470,13 +470,13 @@ void display_table() {
         { "int" },
         { "char" },
     };
-    printf("num    name    type      level  address  size\n");
-    fprintf(ftable, "num    name    type      level  address  size\n");
+    printf("num\t name\t type\t\t level\t address\t size\n");
+    fprintf(ftable, "num\t name\t type\t\t level\t address\t size\n");
     for (int i = 1; i <= symbolTableTail; i++) {   
         switch (symbolTable[i].type) {
             case variable:
                 printf(
-                    "%3d     %s     var:%s    %2d      %3d    %3d\n",
+                    "%3d\t %s\t var:%s\t %2d\t %3d\t %3d\n",
                     i,
                     symbolTable[i].name,
                     map[symbolTable[i].datatype],
@@ -486,7 +486,7 @@ void display_table() {
                 );
                 fprintf(
                     ftable,
-                    "%3d     %s     var:%s    %2d      %3d    %3d\n",
+                    "%3d\t %s\t var:%s\t %2d\t %3d\t %3d\n",
                     i,
                     symbolTable[i].name,
                     map[symbolTable[i].datatype],
@@ -497,7 +497,7 @@ void display_table() {
                 break;
             case array:
                 printf(
-                    "%3d     %s     ary:%s    %2d      %3d    %3d\n",
+                    "%3d\t %s\t ary:%s\t %2d\t %3d\t %3d\n",
                     i,
                     symbolTable[i].name,
                     map[symbolTable[i].datatype],
@@ -507,7 +507,7 @@ void display_table() {
                 );
                 fprintf(
                     ftable,
-                    "%3d     %s     ary:%s    %2d      %3d    %3d\n",
+                    "%3d\t %s\t ary:%s\t %2d\t %3d\t %3d\n",
                     i,
                     symbolTable[i].name,
                     map[symbolTable[i].datatype],
@@ -577,7 +577,7 @@ void interpret()
     s[3] = 0;
     do {
         i = code[p];	// 读当前指令
-        p = p + 1;      
+        p = p + 1;
         switch (i.op)
         {
             case pop:   // 弹出栈顶元素
@@ -659,8 +659,10 @@ void interpret()
                     case 17:    // 把栈顶的值存入存入数组
                         t = t - 1;
                         s[s[t]+1] = s[t+1];
+                        break;
                     case 18:    // 读取数组的值
                         s[t] = s[s[t]+1];
+                        break;
                     case 19:    // 输出栈顶的字符
                         printf("%c", s[t]);
                         fprintf(fresult, "%c", s[t]);
@@ -669,8 +671,10 @@ void interpret()
                         t = t + 1;
                         printf("?");
                         fprintf(fresult, "?");
-                        scanf("%d", &(s[t]));
-                        fprintf(fresult, "%c\n", s[t]);						
+                        char c;
+                        scanf("%c", &c);
+                        fprintf(fresult, "%c\n", c);
+                        s[t] = c;
                         break;
                     case 21:    // mod 运算符
                         t = t - 1;
@@ -712,12 +716,18 @@ void interpret()
 }
 
 int main() {
-    printf("x0 filename: ");
-    scanf("%s", filename);
-
-    if ((fin = fopen(filename, "r")) == NULL) {
+    const char *testfilename = "test/basic.x0";
+    printf("x0 filename: %s\n", testfilename);
+    if ((fin = fopen(testfilename, "r")) == NULL) {
         fatal("Can't open the input file!");
     }
+    
+    // printf("x0 filename: ");
+    // scanf("%s", filename);
+
+    // if ((fin = fopen(testfilename, "r")) == NULL) {
+    //     fatal("Can't open the input file!");
+    // }
     if ((fout = fopen("foutput.txt", "w")) == NULL) {
         fatal("Can't open the foutput.txt file!");
     }

@@ -1,6 +1,6 @@
-all: prog clean
+all: build
 
-prog:   x0lex.l x0yacc.y
+build:   x0lex.l x0yacc.y
 	lex x0lex.l
 	bison -d x0yacc.y
 	cc -g -o compiler lex.yy.c x0yacc.tab.c -lm
