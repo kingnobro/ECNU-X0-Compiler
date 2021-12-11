@@ -41,14 +41,14 @@ Symbol symbolTable[MaxTableSize];
 enum {
     lit,    opr,    lod,
     sto,    cal,    ini,
-    jmp,    jpc,
+    jmp,    jpc,    pop,
 };
 
 // 虚拟机代码结构
 typedef struct _instruction {
     int op;         // 操作码
     int level_diff; // 引用层和声明层的层次差
-    int a;          // todo: what's a means?
+    int a;          // 根据操作码的不同, 有不同的含义
 } Instruction;
 
 // 存放虚拟机代码的数组
@@ -302,11 +302,168 @@ int positionOfSymbol(char *name) {
     return i;
 }
 
+
+int base(int level_diff, int* stack, int base)
+{
+    int b = base;
+    while (level_diff > 0) {
+        b = stack[b];
+        level_diff -= 1;
+    }
+    return b;
+}
+
 /*
  * 虚拟机解释程序
  */
-void interpret() {
+void interpret()
+{
+    int p = 0;          // 指令指针
+    int b = 1;          // 指令基址
+    int t = 0;          // 栈顶指针
+    Instruction i;      // 存放当前指令
+    int s[StackSize];   // 栈
 
+    printf("Start X0\n");
+    fprintf(fout,"Start X0\n");
+
+    s[0] = 0; //s[0]不用
+    s[1] = 0; //主程序的三个联系单元均置为0
+    s[2] = 0;
+    s[3] = 0;
+    do {
+        i = code[p];	// 读当前指令
+        p = p + 1;      
+        switch (i.op)
+        {
+            case pop:   // 弹出栈顶元素
+                t = t - i.a;
+                break;
+            case lit:	// 将常量a的值取到栈顶
+                t = t + 1;
+                s[t] = i.a;				
+                break;
+            case opr:	// 数学、逻辑运算
+                switch (i.a)
+                {
+                    case 0:  // 函数调用结束后返回
+                        t = b - 1;
+                        p = s[t + 3];
+                        b = s[t + 2];
+                        break;
+                    case 1: // 栈顶元素取反
+                        s[t] = - s[t];
+                        break;
+                    case 2: // 次栈顶项加上栈顶项，退两个栈元素，相加值进栈
+                        t = t - 1;
+                        s[t] = s[t] + s[t + 1];
+                        break;
+                    case 3: // 次栈顶项减去栈顶项
+                        t = t - 1;
+                        s[t] = s[t] - s[t + 1];
+                        break;
+                    case 4: // 次栈顶项乘以栈顶项
+                        t = t - 1;
+                        s[t] = s[t] * s[t + 1];
+                        break;
+                    case 5: // 次栈顶项除以栈顶项
+                        t = t - 1;
+                        s[t] = s[t] / s[t + 1];
+                        break;
+                    case 6: // 栈顶元素的奇偶判断
+                        s[t] = s[t] % 2;
+                        break;
+                    case 8: // 次栈顶项与栈顶项是否相等
+                        t = t - 1;
+                        s[t] = (s[t] == s[t + 1]);
+                        break;
+                    case 9: // 次栈顶项与栈顶项是否不等
+                        t = t - 1;
+                        s[t] = (s[t] != s[t + 1]);
+                        break;
+                    case 10:    // 次栈顶项是否小于栈顶项
+                        t = t - 1;
+                        s[t] = (s[t] < s[t + 1]);
+                        break;
+                    case 11:    // 次栈顶项是否大于等于栈顶项
+                        t = t - 1;
+                        s[t] = (s[t] >= s[t + 1]);
+                        break;
+                    case 12:    // 次栈顶项是否大于栈顶项
+                        t = t - 1;
+                        s[t] = (s[t] > s[t + 1]);
+                        break;
+                    case 13:    // 次栈顶项是否小于等于栈顶项
+                        t = t - 1;
+                        s[t] = (s[t] <= s[t + 1]);
+                        break;
+                    case 14:    // 栈顶值输出
+                        printf("%d", s[t]);
+                        fprintf(fout, "%d", s[t]);
+                        break;
+                    case 15:    // 输出换行符
+                        printf("\n");
+                        fprintf(fout,"\n");
+                        break;
+                    case 16:    // 读入一个输入置于栈顶
+                        t = t + 1;
+                        printf("?");
+                        fprintf(fout, "?");
+                        scanf("%d", &(s[t]));
+                        fprintf(fout, "%d\n", s[t]);						
+                        break;
+                    case 17:    // 把栈顶的值存入存入数组
+                        t = t - 1;
+                        s[s[t]+1] = s[t+1];
+                    case 18:    // 读取数组的值
+                        s[t] = s[s[t]+1];
+                    case 19:    // 输出栈顶的字符
+                        printf("%c", s[t]);
+                        fprintf(fout, "%c", s[t]);
+                        break;
+                    case 20:    // 读入一个字符置于栈顶
+                        t = t + 1;
+                        printf("?");
+                        fprintf(fout, "?");
+                        scanf("%d", &(s[t]));
+                        fprintf(fout, "%c\n", s[t]);						
+                        break;
+                    case 21:    // mod 运算符
+                        t = t - 1;
+                        s[t] = s[t] % s[t + 1];
+                        break;
+                    default:
+                        yyerror("unrecognized opr");
+                }
+                break;
+            case lod:	// 取相对当前过程的数据基地址为a的内存的值到栈顶
+                t = t + 1;
+                s[t] = s[i.a + 1];	
+                break;
+            case sto:	// 栈顶的值存到相对当前过程的数据基地址为a的内存
+                s[1 + i.a] = s[t];
+                break;
+            case cal:	// 调用子过程
+                s[t + 1] = base(i.level_diff, s, b);	// 将父过程基地址入栈，即建立静态链
+                s[t + 2] = b;	// 将本过程基地址入栈，即建立动态链
+                s[t + 3] = p;	// 将当前指令指针入栈，即保存返回地址
+                b = t + 1;	// 改变基地址指针值为新过程的基地址
+                p = i.a;	// 跳转
+                break;
+            case ini:	// 在数据栈中为被调用的过程开辟a个单元的数据区
+                t = t + i.a;	
+                break;
+            case jmp:	// 直接跳转
+                p = i.a;
+                break;
+            case jpc:	// 条件跳转
+                if (s[t] == 0) p = i.a;
+                t = t - 1;
+                break;
+        }
+    } while (p != 0);
+    printf("End X0\n");
+    fprintf(fout,"End X0\n");
 }
 
 int main() {
