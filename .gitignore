@@ -1,6 +1,5 @@
-x0/*
-
-!*.l
-!*.y
-!Makefile
-!README.md
+*.txt
+*.c
+*.h
+*.out
+*.dSYM

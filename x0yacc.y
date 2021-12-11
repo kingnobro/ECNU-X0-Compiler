@@ -60,8 +60,6 @@ int procTableTail;      // 嵌套过程索引表 proctable 的指针
 int currentLevel;       // 层次记录
 int variableCount;      // 变量个数, 用于符号表
 int variableSize;       // 变量大小, 用于栈
-bool listSwitch;        // 是否显示虚拟机代码
-bool tableSwitch;       // 是否显示符号表
 bool is_char;
 bool is_array_element;
 bool is_write;
@@ -424,11 +422,9 @@ void listAllCode() {
         { "jpc" },
         { "pop" },
     };
-    if (listSwitch) {
-        for (int i = 0; i < codeTableTail; i++) {
-            printf("%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
-            fprintf(fcode, "%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
-        }
+    for (int i = 0; i < codeTableTail; i++) {
+        printf("%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
+        fprintf(fcode, "%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
     }
 }
 
@@ -728,16 +724,6 @@ int main() {
     if ((ftable = fopen("ftable.txt", "w")) == NULL) {
         fatal("Can't open the ftable.txt file!");
     }
-
-    // 是否输出虚拟机代码
-    printf("List assembly codes?(Y/N)");
-    scanf("%s", filename);
-    listSwitch = (filename[0]=='y' || filename[0]=='Y');
-
-    // 是否输出符号表
-    printf("List symbol symbolTable?(Y/N)");
-    scanf("%s", filename);
-    tableSwitch = (filename[0]=='y' || filename[0]=='Y');
 
     redirectInput(fin);
     init();
