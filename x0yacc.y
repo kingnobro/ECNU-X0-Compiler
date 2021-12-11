@@ -94,14 +94,17 @@ extern void redirectInput(FILE *input);
     int number;
 }
 
-%token CHARSYM INTSYM ELSESYM IFSYM MAINSYM READSYM WHILESYM WRITESYM
-%token PLUS MINUS TIMES DIVIDE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON GRT LES LEQ GEQ NEQ EQL
+%token CHARSYM INTSYM ELSESYM IFSYM MAINSYM READSYM WHILESYM WRITESYM FORSYM
+%token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON
+%token SPLUS SMINUS PLUS MINUS TIMES DIVIDE
+%token GRT LES LEQ GEQ NEQ EQL MOD
 %token <ident> IDENT
 %token <number> NUMBER
 %type <number> var code_address type else_stat
 
-%left    PLUS MINUS
-%left    TIMES DIVIDE
+%left   PLUS MINUS
+%left   TIMES DIVIDE MOD
+%left   SPLUS SMINUS
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSESYM
 
@@ -358,6 +361,10 @@ term:
     {
         genCode(opr, 0, 5);
     }
+    | term MOD factor
+    {
+        genCode(opr, 0, 21);
+    }
     ;
 
 factor:
@@ -366,6 +373,58 @@ factor:
     {
         if (is_array_element) genCode(opr, 0, 18);
         else genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+    }
+    | var SPLUS
+    {
+        if (!is_array_element) {
+            genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(lit, 0, 1);
+            genCode(opr, 0, 2);
+            genCode(sto, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(pop, 0, 1);
+        } else {
+            fatal("[SPLUS] on array element is not permitted");
+        }
+    }
+    | var SMINUS
+    {
+        if (!is_array_element) {
+            genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(lod, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(lit, 0, 1);
+            genCode(opr, 0, 3);
+            genCode(sto, currentLevel - symbolTable[$1].level, symbolTable[$1].address);
+            genCode(pop, 0, 1);
+        } else {
+            fatal("[SPLUS] on array element is not permitted");
+        }
+    }
+    | SPLUS var
+    {
+        if (!is_array_element) {
+            genCode(lod, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+            genCode(lit, 0, 1);
+            genCode(opr, 0, 2);
+            genCode(sto, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+            genCode(pop, 0, 1);
+            genCode(lod, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+        } else {
+            fatal("[SPLUS] on array element is not permitted");
+        }
+    }
+    | SMINUS var
+    {
+        if (!is_array_element) {
+            genCode(lod, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+            genCode(lit, 0, 1);
+            genCode(opr, 0, 3);
+            genCode(sto, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+            genCode(pop, 0, 1);
+            genCode(lod, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
+        } else {
+            fatal("[SPLUS] on array element is not permitted");
+        }
     }
     | NUMBER
     {
@@ -518,13 +577,7 @@ void display_table() {
                 break;
 
             case procedure:
-                /*
-                printf("    %d proc  %s ", i, symbolTable[i].name);
-                printf("lev=%d addr=%d size=%d\n", symbolTable[i].level, symbolTable[i].adr, symbolTable[i].size);
-
-                fprintf(ftable,"    %d proc  %s ", i, symbolTable[i].name);
-                fprintf(ftable,"lev=%d addr=%d size=%d\n", symbolTable[i].level, symbolTable[i].adr, symbolTable[i].size);
-                */
+                fatal("procedure not supported");
                 break;
         }
     }
@@ -716,7 +769,7 @@ void interpret()
 }
 
 int main() {
-    const char *testfilename = "test/basic.x0";
+    const char *testfilename = "test/splus.x0";
     printf("x0 filename: %s\n", testfilename);
     if ((fin = fopen(testfilename, "r")) == NULL) {
         fatal("Can't open the input file!");

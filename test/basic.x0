@@ -1,5 +1,7 @@
 main{
     int a[2];
+    read a[0];
     read a[1];
-    write a[1];
+    a[0] = a[0] + a[1];
+    write a[0];
 }

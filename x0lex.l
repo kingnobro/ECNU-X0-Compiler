@@ -15,6 +15,7 @@ int debugMode = 0;
 [\n]    { line += 1; }
 [\r\n]  { line += 1; }
 "char"  { return CHARSYM; }
+"for"   { return FORSYM; }
 "int"   { return INTSYM; }
 "if"    { return IFSYM; }
 "else"  { return ELSESYM; }
@@ -26,6 +27,8 @@ int debugMode = 0;
 ">="    { return GEQ; }
 "!="    { return NEQ; }
 "=="    { return EQL; }
+"++"    { return SPLUS; }
+"--"    { return SMINUS; }
 "+"     { return PLUS; }
 "-"     { return MINUS; }
 "*"     { return TIMES; }
@@ -41,6 +44,7 @@ int debugMode = 0;
 ";"     { return SEMICOLON; }
 ">"     { return GRT; }
 "<"     { return LES; }
+"%"     { return MOD; }
 [0-9]+  { 
     yylval.number = atoi(yytext);
     return NUMBER;
