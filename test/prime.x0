@@ -1,0 +1,19 @@
+main {
+    int i;
+    int j;
+    int t;
+    int judge;
+    i = 1;
+    while (i < 100) {
+        i = i + 1;
+        judge = 1;
+        j = 1;
+        while (j < i - 1) {
+            j = j + 1;
+            t = i / j;
+            t = t * j;
+            if (t == i) judge = 0;
+        }
+        if (judge) write i ;
+    }
+}

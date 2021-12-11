@@ -315,27 +315,27 @@ simple_expr:
     additive_expr
     | additive_expr GRT additive_expr
     {
-        genCode(opr, 0, 8);
+        genCode(opr, 0, 12);
     }
     | additive_expr LES additive_expr
     {
-        genCode(opr, 0, 9);
+        genCode(opr, 0, 10);
     }
     | additive_expr GEQ additive_expr
     {
-        genCode(opr, 0, 10);
+        genCode(opr, 0, 11);
     }
     | additive_expr LEQ additive_expr
     {
-        genCode(opr, 0, 11);
+        genCode(opr, 0, 13);
     }
     | additive_expr EQL additive_expr
     {
-        genCode(opr, 0, 12);
+        genCode(opr, 0, 8);
     }
     | additive_expr NEQ additive_expr
     {
-        genCode(opr, 0, 13);
+        genCode(opr, 0, 9);
     }
     ;
 
@@ -769,7 +769,7 @@ void interpret()
 }
 
 int main() {
-    const char *testfilename = "test/splus.x0";
+    const char *testfilename = "test/prime.x0";
     printf("x0 filename: %s\n", testfilename);
     if ((fin = fopen(testfilename, "r")) == NULL) {
         fatal("Can't open the input file!");
