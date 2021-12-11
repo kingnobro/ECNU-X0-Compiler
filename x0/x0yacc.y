@@ -27,7 +27,7 @@ enum {
 // 符号表中符号的构成
 typedef struct _symbol {
     char name[MaxNameLength]; // 名字
-    int type;                 // 符号类型(array, variable)
+    int type;                 // 符号类型(array, variable, procedure)
     int datatype;             // 数据类型(int, char)
     int level;                // 所在层次
     int address;              // 地址
@@ -78,6 +78,7 @@ void listAllCode();
 void genCode(int op, int level_diff, int a);
 void setReletiveAddress(int localVariablCount);
 void interpret();
+void fatal(char *s);
 int positionOfSymbol(char *s);
 extern int yyerror(char *);
 extern int yylex(void);
@@ -225,6 +226,11 @@ int yyerror(char *s) {
     return 0;
 }
 
+void fatal(char *s) {
+    printf("Fatal error: %s\nAbort now!\n", s);
+    exit(1);
+}
+
 void init() {
     codeTableTail = 0;
     procTableTail = 0;
@@ -302,7 +308,9 @@ int positionOfSymbol(char *name) {
     return i;
 }
 
-
+/*
+ * 查找基址
+ */
 int base(int level_diff, int* stack, int base)
 {
     int b = base;
@@ -433,15 +441,16 @@ void interpret()
                         s[t] = s[t] % s[t + 1];
                         break;
                     default:
-                        yyerror("unrecognized opr");
+                        fatal("unrecognized opr");
                 }
                 break;
             case lod:	// 取相对当前过程的数据基地址为a的内存的值到栈顶
                 t = t + 1;
-                s[t] = s[i.a + 1];	
+                s[t] = s[base(i.level_diff, s, b) + i.a];	
                 break;
             case sto:	// 栈顶的值存到相对当前过程的数据基地址为a的内存
-                s[1 + i.a] = s[t];
+                s[base(i.level_diff, s, b) + i.a] = s[t];
+                t = t - 1;
                 break;
             case cal:	// 调用子过程
                 s[t + 1] = base(i.level_diff, s, b);	// 将父过程基地址入栈，即建立静态链
@@ -471,20 +480,17 @@ int main() {
     scanf("%s", filename);
 
     if ((fin = fopen(filename, "r")) == NULL) {
-        printf("Can't open the input file!\n");
-        exit(1);
+        fatal("Can't open the input file!");
     }
     if ((fout = fopen("foutput.txt", "w")) == NULL) {
-        printf("Can't open the foutput.txt file!\n");
-        exit(1);
+        fatal("Can't open the foutput.txt file!");
     }
     if ((fout = fopen("ftable.txt", "w")) == NULL) {
-        printf("Can't open the ftable.txt file!\n");
-        exit(1);
+        fatal("Can't open the ftable.txt file!");
     }
 
     // 是否输出虚拟机代码
-    printf("List object codes?(Y/N)");
+    printf("List assembly codes?(Y/N)");
     scanf("%s", filename);
     listSwitch = (filename[0]=='y' || filename[0]=='Y');
 
@@ -500,12 +506,10 @@ int main() {
         printf("\n===Parsing Success===\n");
         fprintf(fout, "\n===Parsing Success===\n");
         if ((fcode = fopen("fcode.txt", "w")) == NULL) {
-            printf("Can't open the fcode.txt file!\n");
-            exit(1);
+            fatal("Can't open the fcode.txt file!");
         }
         if ((fresult = fopen("fresult.txt", "w")) == NULL) {
-            printf("Can't open the fresult.txt file!\n");
-            exit(1);
+            fatal("Can't open the fresult.txt file!");
         }
 
         listAllCode();      // 输出所有汇编指令
