@@ -22,13 +22,14 @@ enum {
 enum {
     x0_int,
     x0_char,
+    x0_bool,
 };
 
 // 符号表中符号的构成
 typedef struct _symbol {
     char name[MaxNameLength]; // 名字
     int type;                 // 符号类型(array, variable, procedure)
-    int datatype;             // 数据类型(int, char)
+    int datatype;             // 数据类型(int, char, bool)
     int level;                // 所在层次
     int address;              // 地址
     int size;                 // 需要分配的数据区空间, 仅 procedure 使用
@@ -61,6 +62,7 @@ int currentLevel;       // 层次记录
 int variableCount;      // 变量个数, 用于符号表
 int variableSize;       // 变量大小, 用于栈
 bool is_char;
+bool is_bool;
 bool is_array_element;
 bool is_write;
 int proctable[3];       // 嵌套过程索引表, 最多嵌套三层
@@ -94,9 +96,9 @@ extern void redirectInput(FILE *input);
     int number;
 }
 
-%token CHARSYM INTSYM ELSESYM IFSYM MAINSYM READSYM WHILESYM WRITESYM FORSYM
+%token CHARSYM BOOLSYM INTSYM ELSESYM IFSYM MAINSYM READSYM WHILESYM WRITESYM FORSYM TRUESYM FALSESYM
 %token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON
-%token SPLUS SMINUS PLUS MINUS TIMES DIVIDE
+%token SPLUS SMINUS PLUS MINUS TIMES DIVIDE AND OR NOT
 %token GRT LES LEQ GEQ NEQ EQL MOD
 %token <ident> IDENT
 %token <number> NUMBER
@@ -104,7 +106,9 @@ extern void redirectInput(FILE *input);
 
 %left   PLUS MINUS
 %left   TIMES DIVIDE MOD
+%left   AND OR
 %left   SPLUS SMINUS
+%right  NOT
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSESYM
 
@@ -152,8 +156,10 @@ declaration_stat:
         addToTable(variable);
         if ($1 == 1) {
             symbolTable[symbolTableTail].datatype = x0_int;
-        } else {
+        } else if ($1 == 2) {
             symbolTable[symbolTableTail].datatype = x0_char;
+        } else {
+            symbolTable[symbolTableTail].datatype = x0_bool;
         }
     }
     | type IDENT LBRACKET NUMBER RBRACKET SEMICOLON
@@ -166,8 +172,10 @@ declaration_stat:
         symbolTable[symbolTableTail].size = $4; // 记录数组元素个数
         if ($1 == 1) {
             symbolTable[symbolTableTail].datatype = x0_int;
-        } else {
+        } else if ($1 == 2) {
             symbolTable[symbolTableTail].datatype = x0_char;
+        } else {
+            symbolTable[symbolTableTail].datatype = x0_bool;
         }
     }
     ;
@@ -181,6 +189,10 @@ type:
     {
         $$ = 2;
     }
+    | BOOLSYM
+    {
+        $$ = 3;
+    }
     ;
 
 var:
@@ -189,8 +201,12 @@ var:
         $$ = positionOfSymbol($1);
         if (symbolTable[$$].datatype == x0_char) {
             is_char = true;
-        } else {
+            is_bool = false;
+        } else if (symbolTable[$$].datatype == x0_bool) {
             is_char = false;
+            is_bool = true;
+        } else {
+            is_char = is_bool = false;
         }
         is_array_element = false;
     }
@@ -199,8 +215,12 @@ var:
         $$ = positionOfSymbol($1);
         if (symbolTable[$$].datatype == x0_char) {
             is_char = true;
-        } else {
+            is_bool = false;
+        } else if (symbolTable[$$].datatype == x0_bool) {
             is_char = false;
+            is_bool = true;
+        } else {
+            is_char = is_bool = false;
         }
         is_array_element = true;
 
@@ -274,7 +294,7 @@ read_stat:
     READSYM var SEMICOLON
     {
         if (is_char) genCode(opr, 0, 20); // 读 char
-        else genCode(opr, 0, 16);   // 读 int
+        else genCode(opr, 0, 16);   // 读 int, bool
 
         if (is_array_element) genCode(opr, 0, 17); // 存到数组
         else genCode(sto, currentLevel - symbolTable[$2].level, symbolTable[$2].address);
@@ -293,7 +313,9 @@ expression_stat:
         if (is_write)
         {
             if (is_char) genCode(opr, 0, 19);
+            else if (is_bool) genCode(opr, 0, 22);
             else genCode(opr, 0, 14);
+
             genCode(opr, 0, 15);    // 换行符
             is_write = false;
         }
@@ -337,6 +359,14 @@ simple_expr:
     {
         genCode(opr, 0, 9);
     }
+    | additive_expr AND additive_expr
+    {
+        genCode(opr, 0, 23);
+    }
+    | additive_expr OR additive_expr
+    {
+        genCode(opr, 0, 24);
+    }
     ;
 
 additive_expr:
@@ -348,6 +378,10 @@ additive_expr:
     | additive_expr MINUS term
     {
         genCode(opr, 0, 3);
+    }
+    | NOT additive_expr
+    {
+        genCode(opr, 0, 25);
     }
     ;
 
@@ -430,6 +464,14 @@ factor:
     {
         genCode(lit, 0, $1);
     }
+    | TRUESYM
+    {
+        genCode(lit, 0, 1);
+    }
+    | FALSESYM
+    {
+        genCode(lit, 0, 0);
+    }
     ;
 
 %%
@@ -456,6 +498,7 @@ void init() {
     errorNumber = 0;
     is_char = false;
     is_array_element = false;
+    is_bool = false;
     is_write = false;
 }
 
@@ -528,6 +571,7 @@ void display_table() {
     char map[][5] = {
         { "int" },
         { "char" },
+        { "bool" },
     };
     printf("num\t name\t type\t\t level\t address\t size\n");
     fprintf(ftable, "num\t name\t type\t\t level\t address\t size\n");
@@ -733,6 +777,26 @@ void interpret()
                         t = t - 1;
                         s[t] = s[t] % s[t + 1];
                         break;
+                    case 22:
+                        if (s[t] != 0) {
+                            printf("true");
+                            fprintf(fresult, "true");
+                        } else {
+                            printf("false");
+                            fprintf(fresult, "false");
+                        }
+                        break;
+                    case 23:    // 与
+                        t = t - 1;
+                        s[t] = (s[t] && s[t + 1]);
+                        break;
+                    case 24:    // 或
+                        t = t - 1;
+                        s[t] = (s[t] || s[t + 1]);
+                        break;
+                    case 25:    // 非
+                        s[t] = !s[t];
+                        break;
                     default:
                         fatal("unrecognized opr");
                 }
@@ -769,7 +833,7 @@ void interpret()
 }
 
 int main() {
-    const char *testfilename = "test/prime.x0";
+    const char *testfilename = "test/bool.x0";
     printf("x0 filename: %s\n", testfilename);
     if ((fin = fopen(testfilename, "r")) == NULL) {
         fatal("Can't open the input file!");

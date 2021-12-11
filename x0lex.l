@@ -15,12 +15,15 @@ int debugMode = 0;
 [\n]    { line += 1; }
 [\r\n]  { line += 1; }
 "char"  { return CHARSYM; }
+"bool"  { return BOOLSYM; }
 "for"   { return FORSYM; }
 "int"   { return INTSYM; }
 "if"    { return IFSYM; }
 "else"  { return ELSESYM; }
 "main"  { return MAINSYM; }
 "read"  { return READSYM; }
+"true"  { return TRUESYM; }
+"false" { return FALSESYM; }
 "while" { return WHILESYM; }
 "write" { return WRITESYM; }
 "<="    { return LEQ; }
@@ -29,6 +32,9 @@ int debugMode = 0;
 "=="    { return EQL; }
 "++"    { return SPLUS; }
 "--"    { return SMINUS; }
+"&&"    { return AND; }
+"||"    { return OR; }
+"!"     { return NOT; }
 "+"     { return PLUS; }
 "-"     { return MINUS; }
 "*"     { return TIMES; }
