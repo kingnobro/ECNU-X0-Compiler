@@ -67,22 +67,18 @@ bool is_write;
 char identifier[MaxNameLength];
 
 FILE* fin;      // 输入源文件
-FILE* fout;     // 输出错误信息
 int errorNumber;    // 打印错误信息
 
 void init();
 void addToTable(int type);
-void listAllCode();
 void genCode(int op, int level_diff, int a);
 void setReletiveAddress(int localVariablCount);
 void interpret(GtkWidget* frame);
 void fatal(char *s);
-void display_table();
 int positionOfSymbol(char *s);
 extern void yyerror(char *);
 extern int yylex(void);
 extern void redirectInput(FILE *input);
-
 
 // GUI
 // ----------------------------------------
@@ -101,6 +97,7 @@ void run_onclick(GtkWidget *widget, gpointer data);
 void print_code(GtkWidget* frame);
 void print_table(GtkWidget* frame);
 // ----------------------------------------
+
 %}
 
 %union {

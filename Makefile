@@ -11,4 +11,3 @@ remove:
 
 clean:
 	rm compiler
-	rm *.txt
