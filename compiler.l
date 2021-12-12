@@ -1,7 +1,7 @@
 %{
 #include <stdio.h>
 #include <string.h>
-#include "x0yacc.tab.h"
+#include "compiler.tab.h"
 
 void yyerror(char *);
 int yywrap(void);

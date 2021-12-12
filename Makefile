@@ -1,9 +1,14 @@
-all: build
+all: build remove
 
-build:   x0lex.l x0yacc.y
-	lex x0lex.l
-	bison -d x0yacc.y
-	cc -g -o compiler lex.yy.c x0yacc.tab.c -lm
+build:   compiler.l compiler.y
+	lex compiler.l
+	bison -d compiler.y
+	cc -g -o compiler lex.yy.c compiler.tab.c -lm
 
-clean:  
-	rm *.c *.h *.txt compiler
+remove:
+	rm *.c *.h
+	rm -rf compiler.dSYM
+
+clean:
+	rm compiler
+	rm *.txt
