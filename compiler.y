@@ -16,7 +16,6 @@
 enum {
     variable,
     array,
-    procedure,
 };
 
 // 符号表中符号的数据类型
@@ -29,7 +28,7 @@ enum {
 // 符号表中符号的构成
 typedef struct _symbol {
     char name[MaxNameLength]; // 名字
-    int type;                 // 符号类型(array, variable, procedure)
+    int type;                 // 符号类型(array, variable)
     int datatype;             // 数据类型(int, char, bool)
     int level;                // 所在层次
     int address;              // 地址
@@ -58,7 +57,6 @@ Instruction code[MaxInstrNumber];
 
 int symbolTableTail;    // 符号表当前尾指针
 int codeTableTail;      // 虚拟机代码指针
-int procTableTail;      // 嵌套过程索引表 proctable 的指针
 int currentLevel;       // 层次记录
 int variableCount;      // 变量个数, 用于符号表
 int variableSize;       // 变量大小, 用于栈
@@ -66,24 +64,18 @@ bool is_char;
 bool is_bool;
 bool is_array_element;
 bool is_write;
-int proctable[3];       // 嵌套过程索引表, 最多嵌套三层
 char identifier[MaxNameLength];
 
 FILE* fin;      // 输入源文件
 FILE* fout;     // 输出错误信息
-FILE* ftable;   // 输出符号表
-FILE* fcode;    // 输出虚拟机代码
-FILE* fresult;  // 输出执行结果
-char filename[MaxNameLength];
 int errorNumber;    // 打印错误信息
-extern int line;
 
 void init();
 void addToTable(int type);
 void listAllCode();
 void genCode(int op, int level_diff, int a);
 void setReletiveAddress(int localVariablCount);
-void interpret();
+void interpret(GtkWidget* frame);
 void fatal(char *s);
 void display_table();
 int positionOfSymbol(char *s);
@@ -105,6 +97,9 @@ void import_openfile(GtkWidget* trigger, gint response_id, gpointer data);
 void save_onclick(GtkWidget *widget, gpointer data);
 void save_openfile(GtkWidget* trigger, gint response_id, gpointer data);
 void run_onclick(GtkWidget *widget, gpointer data);
+
+void print_code(GtkWidget* frame);
+void print_table(GtkWidget* frame);
 // ----------------------------------------
 %}
 
@@ -510,11 +505,10 @@ void fatal(char *s) {
 
 void init() {
     codeTableTail = 0;
-    procTableTail = 0;
     symbolTableTail = 0;
     variableCount = 0;
+    variableSize = 0;
     currentLevel = 0;
-    proctable[0] = 0;
     errorNumber = 0;
     is_char = false;
     is_array_element = false;
@@ -526,27 +520,6 @@ void setReletiveAddress(int localVariablCount) {
     int n = localVariablCount;
     for (int i = 1; i <= n; i += 1) {
         symbolTable[symbolTableTail - i + 1].address = n - i + 3;
-    }
-}
-
-/*
- * 输出所有目标代码
- */
-void listAllCode() {
-    char op_name[][5] = {
-        { "lit" },
-        { "opr" },
-        { "lod" },
-        { "sto" },
-        { "cal" },
-        { "ini" },
-        { "jmp" },
-        { "jpc" },
-        { "pop" },
-    };
-    for (int i = 0; i < codeTableTail; i++) {
-        printf("%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
-        fprintf(fcode, "%d %s %d %d\n", i, op_name[code[i].op], code[i].level_diff, code[i].a);
     }
 }
 
@@ -582,71 +555,7 @@ void addToTable(int type) {
         case array:
             symbolTable[symbolTableTail].level = currentLevel;
             break;
-        case procedure:
-            break;
     }
-}
-
-void display_table() {
-    char map[][5] = {
-        { "int" },
-        { "char" },
-        { "bool" },
-    };
-    printf("num\t name\t type\t\t level\t address\t size\n");
-    fprintf(ftable, "num\t name\t type\t\t level\t address\t size\n");
-    for (int i = 1; i <= symbolTableTail; i++) {   
-        switch (symbolTable[i].type) {
-            case variable:
-                printf(
-                    "%3d\t %s\t var:%s\t %2d\t %3d\t %3d\n",
-                    i,
-                    symbolTable[i].name,
-                    map[symbolTable[i].datatype],
-                    symbolTable[i].level,
-                    symbolTable[i].address,
-                    symbolTable[i].size
-                );
-                fprintf(
-                    ftable,
-                    "%3d\t %s\t var:%s\t %2d\t %3d\t %3d\n",
-                    i,
-                    symbolTable[i].name,
-                    map[symbolTable[i].datatype],
-                    symbolTable[i].level,
-                    symbolTable[i].address,
-                    symbolTable[i].size
-                );
-                break;
-            case array:
-                printf(
-                    "%3d\t %s\t ary:%s\t %2d\t %3d\t %3d\n",
-                    i,
-                    symbolTable[i].name,
-                    map[symbolTable[i].datatype],
-                    symbolTable[i].level,
-                    symbolTable[i].address,
-                    symbolTable[i].size
-                );
-                fprintf(
-                    ftable,
-                    "%3d\t %s\t ary:%s\t %2d\t %3d\t %3d\n",
-                    i,
-                    symbolTable[i].name,
-                    map[symbolTable[i].datatype],
-                    symbolTable[i].level,
-                    symbolTable[i].address,
-                    symbolTable[i].size
-                );
-                break;
-
-            case procedure:
-                fatal("procedure not supported");
-                break;
-        }
-    }
-    printf("\n");
-    fprintf(ftable, "\n");
 }
 
 /*
@@ -677,16 +586,17 @@ int base(int level_diff, int* stack, int base)
 /*
  * 虚拟机解释程序
  */
-void interpret()
+void interpret(GtkWidget* frame)
 {
     int p = 0;          // 指令指针
     int b = 1;          // 指令基址
     int t = 0;          // 栈顶指针
     Instruction i;      // 存放当前指令
     int s[StackSize];   // 栈
+    char out[50];
 
-    printf("Start X0\n");
-    fprintf(fresult,"Start X0\n");
+    GtkTextBuffer* buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(frame));
+    GtkTextIter start,end;
 
     s[0] = 0; //s[0]不用
     s[1] = 0; //主程序的三个联系单元均置为0
@@ -759,19 +669,43 @@ void interpret()
                         s[t] = (s[t] <= s[t + 1]);
                         break;
                     case 14:    // 栈顶值输出
-                        printf("%d", s[t]);
-                        fprintf(fresult, "%d", s[t]);
+                        sprintf(out, "%d", s[t]);
+                        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+                        gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffer),&end,out,strlen(out));
                         break;
                     case 15:    // 输出换行符
-                        printf("\n");
-                        fprintf(fresult, "\n");
+                        sprintf(out, "\n");
+                        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+                        gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffer),&end,out,strlen(out));
                         break;
                     case 16:    // 读入一个输入置于栈顶
                         t = t + 1;
-                        printf("?");
-                        fprintf(fresult, "?");
-                        scanf("%d", &(s[t]));
-                        fprintf(fresult, "%d\n", s[t]);						
+
+                        GtkWidget *dialog;
+                        GtkWidget *title;
+                        GtkWidget *input;
+                        GtkWidget *table;
+                        dialog=gtk_dialog_new_with_buttons("Input",NULL,GTK_DIALOG_MODAL,GTK_STOCK_OK,GTK_RESPONSE_OK,NULL);
+                        gtk_dialog_set_default_response(GTK_DIALOG(dialog),GTK_RESPONSE_OK);  
+
+                        title=gtk_label_new("input");
+                        input=gtk_entry_new();
+                        table=gtk_table_new(2,2,FALSE);
+                        gtk_table_attach_defaults(GTK_TABLE(table),title,0,1,0,1); 
+                        gtk_table_attach_defaults(GTK_TABLE(table),input,0,2,1,2);
+
+                        gtk_table_set_row_spacings(GTK_TABLE(table),5);  
+                        gtk_table_set_col_spacings(GTK_TABLE(table),5);  
+                        gtk_container_set_border_width(GTK_CONTAINER(table),5);
+                        gtk_box_pack_start_defaults(GTK_BOX(GTK_DIALOG(dialog)->vbox),table); 
+                        gtk_widget_show_all(dialog);
+
+                        gint result=gtk_dialog_run(GTK_DIALOG(dialog));
+                        if (result == -5) {
+                            s[t] = atoi(gtk_entry_get_text(GTK_ENTRY(input)));
+                        }
+                        gtk_widget_destroy(dialog);
+
                         break;
                     case 17:    // 把栈顶的值存入存入数组
                         t = t - 1;
@@ -781,17 +715,36 @@ void interpret()
                         s[t] = s[s[t]+1];
                         break;
                     case 19:    // 输出栈顶的字符
-                        printf("%c", s[t]);
-                        fprintf(fresult, "%c", s[t]);
+                        sprintf(out, "%c", s[t]);
+                        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+                        gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffer),&end,out,strlen(out));
                         break;
                     case 20:    // 读入一个字符置于栈顶
                         t = t + 1;
-                        printf("?");
-                        fprintf(fresult, "?");
-                        char c;
-                        scanf("%c", &c);
-                        fprintf(fresult, "%c\n", c);
-                        s[t] = c;
+                        GtkWidget *char_dialog;
+                        GtkWidget *char_title;
+                        GtkWidget *char_input;
+                        GtkWidget *char_table;
+                        char_dialog=gtk_dialog_new_with_buttons("Input",NULL,GTK_DIALOG_MODAL,GTK_STOCK_OK,GTK_RESPONSE_OK,NULL);
+                        gtk_dialog_set_default_response(GTK_DIALOG(char_dialog),GTK_RESPONSE_OK);  
+
+                        char_title=gtk_label_new("input");
+                        char_input=gtk_entry_new();
+                        char_table=gtk_table_new(2,2,FALSE);
+                        gtk_table_attach_defaults(GTK_TABLE(char_table),char_title,0,1,0,1); 
+                        gtk_table_attach_defaults(GTK_TABLE(char_table),char_input,0,2,1,2);
+
+                        gtk_table_set_row_spacings(GTK_TABLE(char_table),5);
+                        gtk_table_set_col_spacings(GTK_TABLE(char_table),5);
+                        gtk_container_set_border_width(GTK_CONTAINER(char_table),5);
+                        gtk_box_pack_start_defaults(GTK_BOX(GTK_DIALOG(char_dialog)->vbox),char_table); 
+                        gtk_widget_show_all(char_dialog);
+                        gchar char_result=gtk_dialog_run(GTK_DIALOG(char_dialog));
+                        if (char_result == -5) {
+                            s[t] = gtk_entry_get_text(GTK_ENTRY(char_input))[0];
+                            printf("%c\n", s[t]);
+                        }
+                        gtk_widget_destroy(char_dialog);
                         break;
                     case 21:    // mod 运算符
                         t = t - 1;
@@ -799,12 +752,12 @@ void interpret()
                         break;
                     case 22:
                         if (s[t] != 0) {
-                            printf("true");
-                            fprintf(fresult, "true");
+                            sprintf(out, "true");
                         } else {
-                            printf("false");
-                            fprintf(fresult, "false");
+                            sprintf(out, "false");
                         }
+                        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+                        gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffer),&end,out,strlen(out));
                         break;
                     case 23:    // 与
                         t = t - 1;
@@ -848,22 +801,21 @@ void interpret()
                 break;
         }
     } while (p != 0);
-    printf("End X0\n");
-    fprintf(fresult,"End X0\n");
 }
 
 int main(int argc, char* argv[]) {
     // 指令结构
     const gchar* code_items[6] = {
+        "id",
         "op",
         "level_diff",
         "a",
     };
     // 符号表结构
     const gchar* symtable_items[9] = {
-        "num",
         "name",
         "type",
+        "datatype",
         "level",
         "address",
         "size",
@@ -928,8 +880,8 @@ int main(int argc, char* argv[]) {
     gtk_table_attach(GTK_TABLE(table), halign2, 9, 10, 0, 1, 
       GTK_FILL, GTK_FILL, 0, 0);
 
-    pcode = gtk_clist_new_with_titles(3, code_items);
-    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window), GTK_POLICY_ALWAYS, GTK_POLICY_NEVER);
+    pcode = gtk_clist_new_with_titles(4, code_items);
+    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window), GTK_POLICY_NEVER, GTK_POLICY_ALWAYS);
     gtk_container_add(GTK_CONTAINER(scrolled_window), pcode);
     gtk_table_attach(GTK_TABLE(table), scrolled_window, 9, 15, 1, 9,
       GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
@@ -965,7 +917,7 @@ int main(int argc, char* argv[]) {
       GTK_FILL, GTK_FILL, 0, 0);
 
     symtable = gtk_clist_new_with_titles(6, symtable_items);
-    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window1), GTK_POLICY_ALWAYS, GTK_POLICY_NEVER);
+    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window1), GTK_POLICY_NEVER, GTK_POLICY_ALWAYS);
     gtk_container_add(GTK_CONTAINER(scrolled_window1), symtable);
     gtk_table_attach(GTK_TABLE(table), scrolled_window1, 9, 15, 10, 15,
       GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
@@ -984,78 +936,218 @@ int main(int argc, char* argv[]) {
     gtk_widget_show_all(window);
     gtk_main();
 
-    // const char *testfilename = "test/bool.x0";
-    // printf("x0 filename: %s\n", testfilename);
-    // if ((fin = fopen(testfilename, "r")) == NULL) {
-    //     fatal("Can't open the input file!");
-    // }
-    
-    // printf("x0 filename: ");
-    // scanf("%s", filename);
-
-    // if ((fin = fopen(filename, "r")) == NULL) {
-    //     fatal("Can't open the input file!");
-    // }
-    // if ((fout = fopen("foutput.txt", "w")) == NULL) {
-    //     fatal("Can't open the foutput.txt file!");
-    // }
-    // if ((ftable = fopen("ftable.txt", "w")) == NULL) {
-    //     fatal("Can't open the ftable.txt file!");
-    // }
-
-    // redirectInput(fin);
-    // init();
-    // yyparse();
-    // if (errorNumber == 0) {
-    //     printf("\n===Parsing Success===\n");
-    //     fprintf(fout, "\n===Parsing Success===\n");
-    //     if ((fcode = fopen("fcode.txt", "w")) == NULL) {
-    //         fatal("Can't open the fcode.txt file!");
-    //     }
-    //     if ((fresult = fopen("fresult.txt", "w")) == NULL) {
-    //         fatal("Can't open the fresult.txt file!");
-    //     }
-
-    //     display_table();
-
-    //     listAllCode();      // 输出所有汇编指令
-    //     fclose(fcode);
-
-    //     interpret();    // 调用解释执行程序
-    //     fclose(fresult);
-    // } else {
-    //     printf("%d errors in x0 program\n", errorNumber);
-    //     fprintf(fout, "%d errors in x0 program\n", errorNumber);
-    // }
-
-    // fclose(fout);
-    // fclose(fin);
-    // fclose(ftable);
     return 0;
 }
 
-void import_onclick(GtkWidget *widget, gpointer data)
-{
-    
+void import_onclick(GtkWidget *widget, gpointer data) {
+    GtkWidget *FileSelection;
+    FileSelection = gtk_file_selection_new ("Choose Source Code");
+    gtk_file_selection_set_filename (GTK_FILE_SELECTION (FileSelection),"*.x0");
+    g_signal_connect(G_OBJECT(FileSelection), "response", G_CALLBACK(import_openfile), data);
+    gtk_widget_show (FileSelection);
 }
 
 
-void import_openfile(GtkWidget* trigger, gint response_id, gpointer data)
-{
+void import_openfile(GtkWidget* trigger, gint response_id, gpointer data) {
+    if(response_id == -5) {
+        FILE* fp=fopen(gtk_file_selection_get_filename(trigger), "r");
 
+        if(fp!=NULL) {
+            const char* blank="";
+
+            GtkTextBuffer* buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(x0code));
+            gtk_text_buffer_set_text(buffer,blank,strlen(blank));
+
+            char ch;
+            char text[2];
+            while((ch=fgetc(fp))!=EOF)
+            {
+                text[0]=ch;
+                text[1]='\0';
+
+                GtkTextIter start,end;
+                gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+                gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffer),&end,text,strlen(text));
+            }
+        }
+        else
+        {
+            GtkWidget *dialog;
+            dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK, "Error: cannot open file");
+            gtk_window_set_title(GTK_WINDOW(dialog), "Error");
+            gtk_dialog_run(GTK_DIALOG(dialog));
+            gtk_widget_destroy(dialog);
+        }
+        fclose(fp);
+    }
+    gtk_widget_destroy(trigger); 
 }
 
 void save_onclick(GtkWidget *widget, gpointer data)
 {
-   
+    GtkWidget *FileSelection;
+    FileSelection = gtk_file_selection_new ("Save File");
+    gtk_file_selection_set_filename (GTK_FILE_SELECTION (FileSelection),"*.x0");
+    g_signal_connect(G_OBJECT(FileSelection), "response", G_CALLBACK(save_openfile), data);
+    gtk_widget_show (FileSelection);
 }
 
 void save_openfile(GtkWidget* trigger, gint response_id, gpointer data)
 {
+    if(response_id == -5)
+    {
+        FILE* fp=fopen(gtk_file_selection_get_filename(trigger),"w");
 
+        if(fp!=NULL)
+        {
+            char* text;
+            GtkTextIter start,end;
+            GtkTextBuffer* buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(x0code));
+
+            gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+            text=gtk_text_buffer_get_text(GTK_TEXT_BUFFER(buffer),&start,&end,FALSE);
+            fprintf(fp,"%s",text);
+
+            GtkWidget *dialog;
+            dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO,
+                GTK_BUTTONS_OK, "Succeed to Save File.");
+            gtk_window_set_title(GTK_WINDOW(dialog), "OK");
+            gtk_dialog_run(GTK_DIALOG(dialog));
+            gtk_widget_destroy(dialog);
+        }
+        else
+        {
+            GtkWidget *dialog;
+            dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK, "Error: cannot save file");
+            gtk_window_set_title(GTK_WINDOW(dialog), "Error");
+            gtk_dialog_run(GTK_DIALOG(dialog));
+            gtk_widget_destroy(dialog);
+        }
+        fclose(fp);
+    }
+    gtk_widget_destroy(trigger); 
 }
 
 void run_onclick(GtkWidget *widget, gpointer data)
 {
+    init();
 
+    const char* blank="";
+    GtkTextBuffer* output_buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(output));
+    gtk_text_buffer_set_text(output_buffer,blank,strlen(blank));
+    gtk_clist_clear(pcode);
+    gtk_clist_clear(symtable);
+
+    FILE* fp=fopen("naivecompiler.temp.syntax(busy)","w");
+    if(fp!=NULL)
+    {
+        char* text;
+        GtkTextIter start,end;
+        GtkTextBuffer* buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(x0code));
+
+        gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer),&start,&end);
+        text=gtk_text_buffer_get_text(GTK_TEXT_BUFFER(buffer),&start,&end,FALSE);
+        fprintf(fp,"%s",text);
+        fclose(fp);
+
+        FILE* temp_fp=fopen("naivecompiler.temp.syntax(busy)","r");
+        if(temp_fp!=NULL)
+        {
+            fin=temp_fp;
+            redirectInput(fin);
+            yyparse();
+
+            if(errorNumber==0)
+            {
+                print_code(pcode);
+                interpret(output);
+            }
+            else
+                printf("%d errors in Naive Compiler\n",errorNumber);
+            print_table(symtable);
+        }
+        fclose(temp_fp);
+
+        remove("naivecompiler.temp.syntax(busy)");
+    }
+    else
+    {
+        GtkWidget *dialog;
+        dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK, "Error: fatal error while processing input");
+        gtk_window_set_title(GTK_WINDOW(dialog), "Error");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+
+        fclose(fp);
+    }
+}
+
+void print_code(GtkWidget* frame)
+{
+    char op_name[][5] = {
+        { "lit" },
+        { "opr" },
+        { "lod" },
+        { "sto" },
+        { "cal" },
+        { "ini" },
+        { "jmp" },
+        { "jpc" },
+        { "pop" },
+    };
+    for (int i = 0; i < codeTableTail; i++)
+    {
+        char id[15], op[20], l[20], a[20];
+        sprintf(id,"%d",i);
+        sprintf(op,"%s",op_name[code[i].op]);
+        sprintf(l,"%d",code[i].level_diff);
+        sprintf(a,"%d",code[i].a);
+
+        char* text[]={id,op,l,a};
+        gtk_clist_append(frame,text);
+    }
+}
+
+void print_table(GtkWidget* frame)
+{
+    char name[15];
+    char type[15];
+    char datatype[15];
+    char level[15];
+    char address[20];
+    char size[20];
+
+    for(int i=1;i<=symbolTableTail;i++) {
+        switch(symbolTable[i].type) {
+            case variable:
+                strcpy(type, "variable");
+                break;
+            case array:
+                strcpy(type, "array");
+                break;
+        }
+        switch(symbolTable[i].datatype) {
+            case x0_int:
+                strcpy(datatype, "int");
+                break;
+            case x0_char:
+                strcpy(datatype, "char");
+                break;
+            case x0_bool:
+                strcpy(datatype, "bool");
+                break;
+            default:
+                strcpy(datatype, "none");
+                break;
+        }
+        sprintf(name,"%d",symbolTable[i].name);
+        sprintf(level,"%d",symbolTable[i].level);
+        sprintf(address,"%d",symbolTable[i].address);
+        sprintf(size,"%d",symbolTable[i].size);
+        char* text[]={name, type, datatype, level, address, size};
+        gtk_clist_append(frame,text);
+    }
 }
