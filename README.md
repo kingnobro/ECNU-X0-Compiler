@@ -2,14 +2,16 @@
 
 只实现了必做的和简单的扩展功能（:fish:）
 
+
+
 ## Tree
 
 ```
-├── Makefile			# build
+├── Makefile
 ├── README.md
-├── compiler.l		# lex
-├── compiler.y		# yacc
-└── test					# 测试用的 X0源文件
+├── compiler.l
+├── compiler.y
+└── test
 ```
 
 
