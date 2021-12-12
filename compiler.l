@@ -5,15 +5,12 @@
 
 void yyerror(char *);
 int yywrap(void);
-
-int line = 1;
-int debugMode = 0;
 %}
 
 %%
 [ \t]   { ; }
-[\n]    { line += 1; }
-[\r\n]  { line += 1; }
+[\n]    { ; }
+[\r\n]  { ; }
 "char"  { return CHARSYM; }
 "bool"  { return BOOLSYM; }
 "for"   { return FORSYM; }
