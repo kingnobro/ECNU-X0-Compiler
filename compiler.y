@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <gtk/gtk.h>
 
 #define MaxTableSize    100     // 符号表容量
 #define MaxNameLength   20      // 标识符的最大长度
@@ -86,9 +87,25 @@ void interpret();
 void fatal(char *s);
 void display_table();
 int positionOfSymbol(char *s);
-extern int yyerror(char *);
+extern void yyerror(char *);
 extern int yylex(void);
 extern void redirectInput(FILE *input);
+
+
+// GUI
+// ----------------------------------------
+GtkWidget *window;
+GtkWidget *x0code;
+GtkWidget *pcode;
+GtkWidget *output;
+GtkWidget *symtable;
+
+void import_onclick(GtkWidget *widget, gpointer data);
+void import_openfile(GtkWidget* trigger, gint response_id, gpointer data);
+void save_onclick(GtkWidget *widget, gpointer data);
+void save_openfile(GtkWidget* trigger, gint response_id, gpointer data);
+void run_onclick(GtkWidget *widget, gpointer data);
+// ----------------------------------------
 %}
 
 %union {
@@ -476,11 +493,14 @@ factor:
 
 %%
 
-int yyerror(char *s) {
+void yyerror(char *s) {
     errorNumber += 1;
-    printf("%s in line %d\n", s, line);
-    fprintf(fout, "%s in line %d\n", s, line);
-    return 0;
+    GtkWidget *dialog;
+    dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK, s);
+    gtk_window_set_title(GTK_WINDOW(dialog), "Compiler Error");
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
 }
 
 void fatal(char *s) {
@@ -832,53 +852,210 @@ void interpret()
     fprintf(fresult,"End X0\n");
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    // 指令结构
+    const gchar* code_items[6] = {
+        "op",
+        "level_diff",
+        "a",
+    };
+    // 符号表结构
+    const gchar* symtable_items[9] = {
+        "num",
+        "name",
+        "type",
+        "level",
+        "address",
+        "size",
+    };
+    GtkWidget *table;
+
+    // 分区标题
+    GtkWidget *x0code_title;
+    GtkWidget *code_title;
+    GtkWidget *output_title;
+    GtkWidget *symtable_title;
+
+    // 操作按钮
+    GtkWidget *import;
+    GtkWidget *save;
+    GtkWidget *run;
+
+    // 对齐方式
+    GtkWidget *halign;
+    GtkWidget *halign2;
+    GtkWidget *halign3;
+    GtkWidget *halign4;
+
+    // 滑块窗口
+    GtkWidget *scrolled_window;
+    GtkWidget *scrolled_window1;
+
+    gtk_init(&argc, &argv);
+
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
+    gtk_widget_set_size_request (window, 900, 600);
+    gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+
+    gtk_window_set_title(GTK_WINDOW(window), "X0 Compiler");
+
+    gtk_container_set_border_width(GTK_CONTAINER(window), 15);
+
+    table = gtk_table_new(16, 16, TRUE);
+    gtk_table_set_row_spacings(GTK_TABLE(table), 5);
+    gtk_table_set_col_spacings(GTK_TABLE(table), 5);
+
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    scrolled_window1 = gtk_scrolled_window_new(NULL, NULL);
+
+    x0code_title = gtk_label_new("X0 Code");
+    halign = gtk_alignment_new(0, 0, 0, 0);
+    gtk_container_add(GTK_CONTAINER(halign), x0code_title);
+    gtk_table_attach(GTK_TABLE(table), halign, 0, 1, 0, 1, 
+      GTK_FILL, GTK_FILL, 0, 0);
+
+    x0code = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(x0code), TRUE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(x0code), TRUE);
+    gtk_table_attach(GTK_TABLE(table), x0code, 0, 9, 1, 9,
+      GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
+    
+
+    code_title = gtk_label_new("P-code");
+    halign2 = gtk_alignment_new(0, 0, 0, 0);
+    gtk_container_add(GTK_CONTAINER(halign2), code_title);
+    gtk_table_attach(GTK_TABLE(table), halign2, 9, 10, 0, 1, 
+      GTK_FILL, GTK_FILL, 0, 0);
+
+    pcode = gtk_clist_new_with_titles(3, code_items);
+    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window), GTK_POLICY_ALWAYS, GTK_POLICY_NEVER);
+    gtk_container_add(GTK_CONTAINER(scrolled_window), pcode);
+    gtk_table_attach(GTK_TABLE(table), scrolled_window, 9, 15, 1, 9,
+      GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
+    
+    import = gtk_button_new_with_label("Import");
+    gtk_widget_set_size_request(import, 50, 30);
+    gtk_table_attach(GTK_TABLE(table), import, 15, 16, 1, 2, 
+      GTK_FILL, GTK_SHRINK, 1, 1);
+    g_signal_connect(G_OBJECT(import), "clicked", G_CALLBACK(import_onclick),NULL);
+
+    save = gtk_button_new_with_label("Save");
+    gtk_widget_set_size_request(save, 50, 30);
+    gtk_table_attach(GTK_TABLE(table), save, 15, 16, 2, 3, 
+      GTK_FILL, GTK_SHRINK, 1, 1);
+    g_signal_connect(G_OBJECT(save), "clicked", G_CALLBACK(save_onclick),NULL);
+    
+    output_title = gtk_label_new("Output");
+    halign3 = gtk_alignment_new(0, 0, 0, 0);
+    gtk_container_add(GTK_CONTAINER(halign3), output_title);
+    gtk_table_attach(GTK_TABLE(table), halign3, 0, 1, 9, 10, 
+      GTK_FILL, GTK_FILL, 0, 0);
+
+    output = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(output), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(output), FALSE);
+    gtk_table_attach(GTK_TABLE(table), output, 0, 9, 10, 15,
+      GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
+
+    symtable_title = gtk_label_new("Symbol Table");
+    halign4 = gtk_alignment_new(0, 0, 0, 0);
+    gtk_container_add(GTK_CONTAINER(halign4), symtable_title);
+    gtk_table_attach(GTK_TABLE(table), halign4, 9, 10, 9, 10, 
+      GTK_FILL, GTK_FILL, 0, 0);
+
+    symtable = gtk_clist_new_with_titles(6, symtable_items);
+    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW(scrolled_window1), GTK_POLICY_ALWAYS, GTK_POLICY_NEVER);
+    gtk_container_add(GTK_CONTAINER(scrolled_window1), symtable);
+    gtk_table_attach(GTK_TABLE(table), scrolled_window1, 9, 15, 10, 15,
+      GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND, 1, 1);
+    
+    run = gtk_button_new_with_label("Run");
+    gtk_widget_set_size_request(run, 50, 30);
+    gtk_table_attach(GTK_TABLE(table), run, 0, 1, 15, 16, 
+      GTK_FILL, GTK_SHRINK, 1, 1);
+    g_signal_connect(G_OBJECT(run), "clicked", G_CALLBACK(run_onclick),NULL);
+
+    gtk_container_add(GTK_CONTAINER(window), table);
+
+    g_signal_connect_swapped(G_OBJECT(window), "destroy",
+        G_CALLBACK(gtk_main_quit), G_OBJECT(window));
+
+    gtk_widget_show_all(window);
+    gtk_main();
+
     // const char *testfilename = "test/bool.x0";
     // printf("x0 filename: %s\n", testfilename);
     // if ((fin = fopen(testfilename, "r")) == NULL) {
     //     fatal("Can't open the input file!");
     // }
     
-    printf("x0 filename: ");
-    scanf("%s", filename);
+    // printf("x0 filename: ");
+    // scanf("%s", filename);
 
-    if ((fin = fopen(filename, "r")) == NULL) {
-        fatal("Can't open the input file!");
-    }
-    if ((fout = fopen("foutput.txt", "w")) == NULL) {
-        fatal("Can't open the foutput.txt file!");
-    }
-    if ((ftable = fopen("ftable.txt", "w")) == NULL) {
-        fatal("Can't open the ftable.txt file!");
-    }
+    // if ((fin = fopen(filename, "r")) == NULL) {
+    //     fatal("Can't open the input file!");
+    // }
+    // if ((fout = fopen("foutput.txt", "w")) == NULL) {
+    //     fatal("Can't open the foutput.txt file!");
+    // }
+    // if ((ftable = fopen("ftable.txt", "w")) == NULL) {
+    //     fatal("Can't open the ftable.txt file!");
+    // }
 
-    redirectInput(fin);
-    init();
-    yyparse();
-    if (errorNumber == 0) {
-        printf("\n===Parsing Success===\n");
-        fprintf(fout, "\n===Parsing Success===\n");
-        if ((fcode = fopen("fcode.txt", "w")) == NULL) {
-            fatal("Can't open the fcode.txt file!");
-        }
-        if ((fresult = fopen("fresult.txt", "w")) == NULL) {
-            fatal("Can't open the fresult.txt file!");
-        }
+    // redirectInput(fin);
+    // init();
+    // yyparse();
+    // if (errorNumber == 0) {
+    //     printf("\n===Parsing Success===\n");
+    //     fprintf(fout, "\n===Parsing Success===\n");
+    //     if ((fcode = fopen("fcode.txt", "w")) == NULL) {
+    //         fatal("Can't open the fcode.txt file!");
+    //     }
+    //     if ((fresult = fopen("fresult.txt", "w")) == NULL) {
+    //         fatal("Can't open the fresult.txt file!");
+    //     }
 
-        display_table();
+    //     display_table();
 
-        listAllCode();      // 输出所有汇编指令
-        fclose(fcode);
+    //     listAllCode();      // 输出所有汇编指令
+    //     fclose(fcode);
 
-        interpret();    // 调用解释执行程序
-        fclose(fresult);
-    } else {
-        printf("%d errors in x0 program\n", errorNumber);
-        fprintf(fout, "%d errors in x0 program\n", errorNumber);
-    }
+    //     interpret();    // 调用解释执行程序
+    //     fclose(fresult);
+    // } else {
+    //     printf("%d errors in x0 program\n", errorNumber);
+    //     fprintf(fout, "%d errors in x0 program\n", errorNumber);
+    // }
 
-    fclose(fout);
-    fclose(fin);
-    fclose(ftable);
+    // fclose(fout);
+    // fclose(fin);
+    // fclose(ftable);
     return 0;
+}
+
+void import_onclick(GtkWidget *widget, gpointer data)
+{
+    
+}
+
+
+void import_openfile(GtkWidget* trigger, gint response_id, gpointer data)
+{
+
+}
+
+void save_onclick(GtkWidget *widget, gpointer data)
+{
+   
+}
+
+void save_openfile(GtkWidget* trigger, gint response_id, gpointer data)
+{
+
+}
+
+void run_onclick(GtkWidget *widget, gpointer data)
+{
+
 }
