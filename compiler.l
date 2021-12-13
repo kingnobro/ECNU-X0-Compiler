@@ -32,6 +32,7 @@ int yywrap(void);
 "&&"    { return AND; }
 "||"    { return OR; }
 "!"     { return NOT; }
+"^"     { return XOR; }
 "+"     { return PLUS; }
 "-"     { return MINUS; }
 "*"     { return TIMES; }

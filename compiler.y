@@ -108,7 +108,7 @@ void print_table(GtkWidget * frame);
 
 %token CHARSYM BOOLSYM INTSYM ELSESYM IFSYM MAINSYM READSYM WHILESYM WRITESYM FORSYM TRUESYM FALSESYM
 %token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE BECOMES COMMA SEMICOLON
-%token SPLUS SMINUS PLUS MINUS TIMES DIVIDE AND OR NOT
+%token SPLUS SMINUS PLUS MINUS TIMES DIVIDE AND OR NOT XOR
 %token GRT LES LEQ GEQ NEQ EQL MOD
 %token<ident> IDENT
 %token<number> NUMBER
@@ -116,7 +116,7 @@ void print_table(GtkWidget * frame);
 
 %left PLUS MINUS
 %left TIMES DIVIDE MOD
-%left AND OR
+%left AND OR XOR
 %left SPLUS SMINUS
 %right NOT 
 
@@ -287,7 +287,8 @@ simple_expr : additive_expr | additive_expr GRT additive_expr {
 | additive_expr EQL additive_expr { genCode(opr, 0, 8); }
 | additive_expr NEQ additive_expr { genCode(opr, 0, 9); }
 | additive_expr AND additive_expr { genCode(opr, 0, 23); }
-| additive_expr OR additive_expr { genCode(opr, 0, 24); };
+| additive_expr OR additive_expr { genCode(opr, 0, 24); }
+| additive_expr XOR additive_expr { genCode(opr, 0, 26); };
 
 additive_expr : term | additive_expr PLUS term { genCode(opr, 0, 2); }
 | additive_expr MINUS term { genCode(opr, 0, 3); }
@@ -652,6 +653,10 @@ void interpret(GtkWidget* frame) {
           case 25:  // 非
             s[t] = !s[t];
             break;
+          case 26:  // 异或
+            t = t - 1;
+            s[t] = (s[t] ^ s[t + 1]);
+            break;
           default:
             fatal("unrecognized opr");
         }
@@ -939,8 +944,7 @@ void run_onclick(GtkWidget* widget, gpointer data) {
     GtkTextBuffer* buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(x0code));
 
     gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffer), &start, &end);
-    text =
-        gtk_text_buffer_get_text(GTK_TEXT_BUFFER(buffer), &start, &end, FALSE);
+    text = gtk_text_buffer_get_text(GTK_TEXT_BUFFER(buffer), &start, &end, FALSE);
     fprintf(fp, "%s", text);
     fclose(fp);
 

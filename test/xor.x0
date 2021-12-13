@@ -1,0 +1,9 @@
+main {
+    int a;
+    int b;
+    a = 0;
+    b = 1;
+    write a ^ a;
+    write b ^ b;
+    write a ^ b;
+}
