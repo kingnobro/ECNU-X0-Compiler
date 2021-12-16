@@ -1,19 +1,8 @@
 # ECNU-X0-Compiler
 
-- 只实现了必做的和简单的扩展功能(...)
-- 有些地方代码写得很乱, 但是懒得改了
-
-
-
-## Tree
-
-```
-├── Makefile
-├── README.md
-├── compiler.l
-├── compiler.y
-└── test
-```
+- 只实现了必做的和简单的扩展功能(大四了...)
+- 有些地方代码写得很乱，但是懒得改了
+- Commit History 中可以看到不包含 GUI 的代码。一开始先别管 GUI，先把功能实现
 
 
 
